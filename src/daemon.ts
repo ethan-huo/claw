@@ -30,6 +30,8 @@ const IGNORE = [
   "coverage/**",
   ".next/**",
   ".claw/**",
+  ".agents/skills/**", // skill mechanism's territory
+  ".claude/skills/**",
 ];
 
 export type ClawPaths = {
@@ -138,7 +140,6 @@ function acquireLock(lock: string): boolean {
 function relevant(path: string, root: string): boolean {
   if (!path.endsWith(".md")) return false;
   if (basename(path) === "index.md") return false; // generated index
-  if (basename(path) === "SKILL.md") return false; // skill territory, not indexed
   if (path === join(root, "AGENTS.md")) return false; // pointer-block host
   return true;
 }

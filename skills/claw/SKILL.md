@@ -55,8 +55,9 @@ pointer-only and collapses to a single line once it grows past a soft cap.
 
 Only **frontmatter-bearing** docs are indexed. A plain `README.md` or
 `AGENTS.md` is not an OKF concept and is skipped. `index.md` and `log.md` are
-reserved filenames. A directory containing a `SKILL.md` is a skill bundle —
-that's the skill mechanism's territory, so claw indexes nothing inside it.
+reserved filenames. The skill install roots `.agents/skills/` and
+`.claude/skills/` are the skill mechanism's territory — claw indexes nothing
+under them.
 
 ### daemon — keep the index fresh automatically
 

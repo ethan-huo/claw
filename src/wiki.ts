@@ -37,21 +37,15 @@ export const BLOCK_END = "<!-- /claw:index -->";
 // pointer line so an always-loaded file (AGENTS.md) stays bounded.
 const POINTER_CAP = 60;
 
+// Where installed/active skills live — the skill mechanism's territory. These
+// are the only two; claw indexes nothing under them.
+const SKILL_ROOTS = [".agents/skills/", ".claude/skills/"];
+
 export function scanDocs(root: string): DocRecord[] {
-  const all = listMarkdown(root);
-
-  // A directory containing a SKILL.md is a skill bundle — the skill mechanism's
-  // territory. claw cedes the whole bundle (the SKILL.md and its references) and
-  // indexes nothing inside it.
-  const skillDirs = all
-    .filter((rel) => rel.endsWith("/SKILL.md"))
-    .map((rel) => rel.slice(0, -"SKILL.md".length)); // "skills/foo/"
-  const inSkillBundle = (rel: string): boolean =>
-    rel.split("/").pop() === "SKILL.md" || skillDirs.some((dir) => rel.startsWith(dir));
-
   const records: DocRecord[] = [];
-  for (const rel of all) {
-    if (inSkillBundle(rel)) continue;
+
+  for (const rel of listMarkdown(root)) {
+    if (SKILL_ROOTS.some((dir) => rel.startsWith(dir))) continue;
     const base = rel.split("/").pop() ?? "";
     if (RESERVED.has(base)) continue;
 

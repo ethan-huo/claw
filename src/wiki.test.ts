@@ -43,14 +43,15 @@ test("in a git repo, honors .gitignore exactly (no leaked ignored docs)", () => 
   expect(titles).toEqual(["Public"]); // vendor/secret excluded via git ls-files
 });
 
-test("cedes skill bundles: a SKILL.md dir and its references are not indexed", () => {
+test("cedes the skill install roots (.agents/skills, .claude/skills)", () => {
   const root = fixture({
     "docs/real.md": "---\ntype: Note\ntitle: Real\n---\nx",
-    "skills/foo/SKILL.md": "---\nname: foo\ndescription: a skill\n---\nx",
-    "skills/foo/references/api.md": "---\ntype: Reference\ntitle: SkillRef\n---\nx",
+    ".agents/skills/foo.bar/SKILL.md": "---\nname: foo\ndescription: installed\n---\nx",
+    ".claude/skills/baz/SKILL.md": "---\nname: baz\ndescription: installed\n---\nx",
+    ".agents/skills/foo.bar/references/api.md": "---\ntype: Reference\ntitle: Ref\n---\nx",
   });
   const titles = scanDocs(root).map((d) => d.title);
-  expect(titles).toEqual(["Real"]); // SKILL.md and its references excluded
+  expect(titles).toEqual(["Real"]); // everything under the skill roots excluded
 });
 
 test("scans frontmatter docs, skipping reserved, plain, and ignored files", () => {
