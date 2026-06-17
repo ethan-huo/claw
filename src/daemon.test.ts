@@ -92,17 +92,19 @@ test("startDaemon builds the index on start and releases the lock on stop", asyn
   expect(existsSync(clawPaths(root).lock)).toBe(false);
 });
 
-test("startDaemon reindexes on a new doc and refreshes the AGENTS.md block", async () => {
+test("startDaemon reindexes a new doc into index.yaml and references it in AGENTS.md", async () => {
   const root = tmpRepo({ "docs/a.md": DOC("First", "first"), "AGENTS.md": "# Project\n" });
   const handle = await startDaemon(root);
   handles.push(handle!);
 
   writeFileSync(join(root, "docs/b.md"), DOC("Second", "added live"));
+  // the new doc lands in index.yaml...
   expect(await waitFor(() => indexText(root).includes("file: ./docs/b.md"))).toBe(true);
 
+  // ...and AGENTS.md carries the static reference block (default mode).
   const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
   expect(agents).toContain("<!-- claw:index -->");
-  expect(agents).toContain("[Second](docs/b.md)");
+  expect(agents).toContain("./index.yaml");
 });
 
 test("only one daemon owns a repo: a second startDaemon returns undefined", async () => {

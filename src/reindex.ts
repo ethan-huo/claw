@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { buildIndex, buildPointerBlock, injectManagedBlock, scanDocs } from "./wiki.ts";
+import { buildIndex, inlineBlock, injectManagedBlock, referenceBlock, scanDocs } from "./wiki.ts";
 
 export type ReindexResult = {
   scanned: number;
@@ -9,7 +9,8 @@ export type ReindexResult = {
 };
 
 export type ReindexOptions = {
-  inject?: string; // absolute path to inject a pointer block into (e.g. AGENTS.md)
+  inject?: string; // absolute path to inject an index block into (e.g. AGENTS.md)
+  inline?: boolean; // embed the full index instead of a reference to index.yaml
   dryRun?: boolean;
 };
 
@@ -24,9 +25,12 @@ export function reindex(root: string, options: ReindexOptions = {}): ReindexResu
   wrote.push(show(indexPath));
 
   if (options.inject) {
+    const block = options.inline ? inlineBlock(docs) : referenceBlock();
     const previous = existsSync(options.inject) ? readFileSync(options.inject, "utf8") : "";
-    const next = injectManagedBlock(previous, buildPointerBlock(docs));
-    if (!options.dryRun) writeFileSync(options.inject, next);
+    const next = injectManagedBlock(previous, block);
+    // Skip the write when nothing changed — the reference block is static, so a
+    // daemon re-running this every change shouldn't churn the file's mtime.
+    if (!options.dryRun && next !== previous) writeFileSync(options.inject, next);
     wrote.push(show(options.inject));
   }
 

@@ -7,8 +7,9 @@ bundle — a directory of docs with YAML frontmatter — and gives an agent two
 verbs over it:
 
 - **`claw index`** — scan a tree of frontmatter docs and (re)generate an OKF
-  `index.yaml`; optionally `--inject` a pointer block into an always-loaded file
-  like `AGENTS.md`. For continuous freshness, use `claw daemon` below.
+  `index.yaml`; optionally `--inject` a block into an always-loaded file like
+  `AGENTS.md` (a static reference to `index.yaml` by default, or the full index
+  with `--inline`). For continuous freshness, use `claw daemon` below.
 - **`claw read`** — read a doc or a directory's index with agent-optimized
   navigation: a `$claw` frontmatter channel, `--toc`, `--section`, and a
   structural summary for long docs.

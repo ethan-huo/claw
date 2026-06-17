@@ -8,8 +8,9 @@ import {
   BLOCK_END,
   BLOCK_START,
   buildIndex,
-  buildPointerBlock,
+  inlineBlock,
   injectManagedBlock,
+  referenceBlock,
   scanDocs,
   type DocRecord,
 } from "./wiki.ts";
@@ -99,41 +100,38 @@ test("buildIndex emits an empty YAML list for no docs", () => {
   expect(parse(buildIndex([]))).toEqual([]);
 });
 
-test("pointer block inlines entries under the cap", () => {
-  const block = buildPointerBlock([{ path: "a.md", type: "Note", title: "A", description: "d" }]);
+test("referenceBlock points at index.yaml, static and marker-wrapped", () => {
+  const block = referenceBlock();
   expect(block.startsWith(BLOCK_START)).toBe(true);
   expect(block.endsWith(BLOCK_END)).toBe(true);
-  expect(block).toContain("- [A](a.md) — d");
+  expect(block).toContain("./index.yaml");
+  expect(referenceBlock()).toBe(block); // independent of docs — no churn
 });
 
-test("pointer block collapses past the cap", () => {
-  const many = Array.from({ length: 80 }, (_, i) => ({
-    path: `d${i}.md`,
-    type: "Note",
-    title: `D${i}`,
-  }));
-  const block = buildPointerBlock(many);
-  expect(block).toContain("80 docs indexed");
-  expect(block).not.toContain("- [D0]");
+test("inlineBlock embeds the index.yaml content in a fenced yaml block", () => {
+  const block = inlineBlock([
+    { path: "a.md", type: "Note", title: "A", data: { type: "Note", description: "d" } },
+  ]);
+  expect(block).toContain("```yaml");
+  expect(block).toContain("- file: ./a.md");
+  expect(block).toContain("description: d");
 });
 
 test("injects then replaces a managed block idempotently", () => {
-  const block = buildPointerBlock([{ path: "a.md", type: "Note", title: "A" }]);
-  const once = injectManagedBlock("# Project\n", block);
+  const once = injectManagedBlock("# Project\n", referenceBlock());
   expect(once).toContain("# Project");
   expect(once).toContain(BLOCK_START);
 
-  const newer = buildPointerBlock([{ path: "b.md", type: "Note", title: "B" }]);
+  const newer = inlineBlock([{ path: "b.md", type: "Note", title: "B", data: { type: "Note" } }]);
   const twice = injectManagedBlock(once, newer);
   expect(twice.split(BLOCK_START).length - 1).toBe(1); // exactly one block
-  expect(twice).toContain("[B](b.md)");
-  expect(twice).not.toContain("[A](a.md)");
+  expect(twice).toContain("file: ./b.md");
+  expect(twice).not.toContain("./index.yaml"); // old reference block replaced
 });
 
 test("injectManagedBlock refuses to write when a marker is unbalanced", () => {
-  const block = buildPointerBlock([{ path: "a.md", type: "Note", title: "A" }]);
   // start marker present, end marker missing → corrupted; must not append.
-  expect(() => injectManagedBlock(`# Project\n${BLOCK_START}\nstray\n`, block)).toThrow(
+  expect(() => injectManagedBlock(`# Project\n${BLOCK_START}\nstray\n`, referenceBlock())).toThrow(
     /unbalanced/,
   );
 });

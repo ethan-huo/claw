@@ -41,17 +41,22 @@ re-reading the whole file.
 ```bash
 claw index                            # write index.yaml for the current directory tree
 claw index --dir docs                 # index a specific directory
-claw index --inject AGENTS.md         # also inject a pointer block into an always-loaded file
+claw index --inject AGENTS.md         # add a reference block pointing at index.yaml
+claw index --inject AGENTS.md --inline  # embed the full index instead of a reference
 claw index --dry-run                  # report what would change, write nothing
 ```
 
 (To rebuild automatically on every change, use the daemon below instead of
 re-running `claw index`.)
 
-`--inject` maintains a `<!-- claw:index -->…<!-- /claw:index -->` block of
-pointers (path + description + `when`), so an always-loaded file gains ambient
-awareness of the wiki without inlining doc bodies. The block stays
-pointer-only and collapses to a single line once it grows past a soft cap.
+`--inject` maintains a `<!-- claw:index -->…<!-- /claw:index -->` block in an
+always-loaded file (e.g. `AGENTS.md`). Two modes:
+
+- **reference (default)** — a static one-line prompt telling the agent that
+  `./index.yaml` is the workspace doc index. It never changes as docs change, so
+  it adds no churn to the host file.
+- **`--inline`** — embeds the full `index.yaml` content (fenced YAML) for ambient,
+  no-extra-read visibility. Grows with the corpus and changes as docs change.
 
 claw writes the index to `index.yaml` (a generated data file — gitignore it).
 Only **frontmatter-bearing** docs are indexed: a plain `README.md` or `AGENTS.md`

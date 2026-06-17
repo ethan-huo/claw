@@ -19,13 +19,18 @@ export const schema = {
     .meta({
       description:
         "Scan a directory of markdown docs and (re)generate an index.yaml from their frontmatter.",
-      examples: ["claw index", "claw index --inject AGENTS.md", "claw index --dir docs"],
+      examples: [
+        "claw index",
+        "claw index --inject AGENTS.md",
+        "claw index --inject AGENTS.md --inline",
+      ],
     })
     .input(
       s(
         v.object({
           dir: v.optional(v.string()), // directory to scan; defaults to cwd
-          inject: v.optional(v.string()), // inject/refresh a pointer block in this file
+          inject: v.optional(v.string()), // inject/refresh an index block in this file
+          inline: v.optional(v.boolean()), // embed the full index instead of a reference to index.yaml
           dryRun: v.optional(v.boolean()), // report changes without writing
         }),
       ),

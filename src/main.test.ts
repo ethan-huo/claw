@@ -51,7 +51,7 @@ test("--schema exposes both commands", async () => {
   expect(stdout).toContain("read(");
 });
 
-test("index writes index.yaml and injects a pointer block", async () => {
+test("index writes index.yaml and injects a reference block by default", async () => {
   const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
   const { stdout, exitCode, stderr } = await claw(root, "index", "--inject", "AGENTS.md");
   expect(exitCode, stderr).toBe(0);
@@ -59,9 +59,18 @@ test("index writes index.yaml and injects a pointer block", async () => {
 
   expect(readFileSync(join(root, "index.yaml"), "utf8")).toContain("file: ./docs/proposal.md");
   const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
-  expect(agents).toContain("# Project");
+  expect(agents).toContain("# Project"); // existing content preserved
   expect(agents).toContain("<!-- claw:index -->");
-  expect(agents).toContain("[Wiki](docs/proposal.md)");
+  expect(agents).toContain("./index.yaml"); // reference, not inline content
+  expect(agents).not.toContain("file: ./docs/proposal.md");
+});
+
+test("index --inline embeds the index content in the injected block", async () => {
+  const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
+  await claw(root, "index", "--inject", "AGENTS.md", "--inline");
+  const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
+  expect(agents).toContain("```yaml");
+  expect(agents).toContain("file: ./docs/proposal.md");
 });
 
 test("index --dry-run reports without writing", async () => {

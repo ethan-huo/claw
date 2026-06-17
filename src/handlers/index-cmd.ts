@@ -32,7 +32,11 @@ export const indexHandlers: Pick<AppHandlers, "index"> = {
       }
     }
 
-    const result = reindex(root, { inject, dryRun: input.dryRun ?? false });
+    const result = reindex(root, {
+      inject,
+      inline: input.inline ?? false,
+      dryRun: input.dryRun ?? false,
+    });
 
     printResult(
       { ok: true, scanned: result.scanned, wrote: result.wrote, dry_run: input.dryRun ?? false },
