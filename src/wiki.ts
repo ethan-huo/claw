@@ -131,14 +131,14 @@ function deriveTitle(path: string): string {
 }
 
 // A real markdown file: an `# index.md` heading, then one entry per concept —
-// `file: ./<path>` plus the doc's frontmatter verbatim — separated by `---`
-// thematic breaks. Blank lines around the rule keep it a divider, not a setext
-// heading. Simple to produce, trivial to read or parse.
+// `file: ./<path>` plus the doc's frontmatter verbatim — joined by `---`
+// thematic breaks. The blank lines around the rule are required: `text\n---`
+// would parse as a setext heading, not a divider.
 export function buildIndex(docs: DocRecord[]): string {
   const head = "# index.md\n";
   if (docs.length === 0) return head;
   const entries = docs.map((doc) => stringify({ file: `./${doc.path}`, ...doc.data }).trimEnd());
-  return `${head}\n${entries.join("\n\n---\n\n")}\n\n---\n`;
+  return `${head}\n${entries.join("\n\n---\n\n")}\n`;
 }
 
 function entry(doc: DocRecord): string {
