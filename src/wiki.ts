@@ -130,15 +130,15 @@ function deriveTitle(path: string): string {
     .join(" ");
 }
 
-// The index is a stream of YAML documents — one per concept — each carrying the
-// doc's path plus its frontmatter verbatim. Simple to produce, trivial to parse:
-// no bespoke markdown, just `file:` prepended to the existing frontmatter.
+// A real markdown file: an `# index.md` heading, then one entry per concept —
+// `file: ./<path>` plus the doc's frontmatter verbatim — separated by `---`
+// thematic breaks. Blank lines around the rule keep it a divider, not a setext
+// heading. Simple to produce, trivial to read or parse.
 export function buildIndex(docs: DocRecord[]): string {
-  if (docs.length === 0) return "";
-  const blocks = docs.map(
-    (doc) => `---\n${stringify({ file: `./${doc.path}`, ...doc.data }).trimEnd()}`,
-  );
-  return `${blocks.join("\n")}\n---\n`;
+  const head = "# index.md\n";
+  if (docs.length === 0) return head;
+  const entries = docs.map((doc) => stringify({ file: `./${doc.path}`, ...doc.data }).trimEnd());
+  return `${head}\n${entries.join("\n\n---\n\n")}\n\n---\n`;
 }
 
 function entry(doc: DocRecord): string {

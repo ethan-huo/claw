@@ -73,7 +73,7 @@ test("scans frontmatter docs, skipping reserved, plain, and ignored files", () =
   expect(docs[1]?.title).toBe("B"); // derived from filename
 });
 
-test("builds a YAML-stream index: file path + frontmatter verbatim per doc", () => {
+test("builds a markdown index: heading, then file + frontmatter per doc, rule-separated", () => {
   const docs: DocRecord[] = [
     {
       path: "docs/spec.md",
@@ -84,15 +84,15 @@ test("builds a YAML-stream index: file path + frontmatter verbatim per doc", () 
     { path: "readme.md", type: "Note", title: "Readme", data: { type: "Note", when: "on start" } },
   ];
   const out = buildIndex(docs);
-  expect(out.startsWith("---\n")).toBe(true);
-  expect(out.endsWith("---\n")).toBe(true); // terminated stream
+  expect(out.startsWith("# index.md\n")).toBe(true);
   expect(out).toContain("file: ./docs/spec.md");
   expect(out).toContain("description: the spec");
   expect(out).toContain("when: on start");
+  expect(out).toContain("\n\n---\n\n"); // a divider between entries, with blank lines
 });
 
-test("buildIndex returns empty for no docs", () => {
-  expect(buildIndex([])).toBe("");
+test("buildIndex emits just the heading for no docs", () => {
+  expect(buildIndex([])).toBe("# index.md\n");
 });
 
 test("pointer block inlines entries under the cap", () => {
