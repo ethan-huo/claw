@@ -57,7 +57,7 @@ test("index writes index.md and injects a pointer block", async () => {
   expect(exitCode, stderr).toBe(0);
   expect(stdout).toContain("scanned: 1");
 
-  expect(readFileSync(join(root, "index.md"), "utf8")).toContain("[Wiki](docs/proposal.md)");
+  expect(readFileSync(join(root, "index.md"), "utf8")).toContain("file: ./docs/proposal.md");
   const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
   expect(agents).toContain("# Project");
   expect(agents).toContain("<!-- claw:index -->");
@@ -94,7 +94,7 @@ test("read on a directory without index.md synthesizes one", async () => {
   const root = fixture({ "docs/proposal.md": PROPOSAL });
   const { stdout } = await claw(root, "read", "docs");
   expect(stdout).toContain("synthesized: true");
-  expect(stdout).toContain("[Wiki](proposal.md)");
+  expect(stdout).toContain("file: ./proposal.md");
 });
 
 test("read on a missing path exits 3 with a structured error", async () => {

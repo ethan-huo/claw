@@ -84,7 +84,7 @@ test("startDaemon builds the index on start and releases the lock on stop", asyn
   expect(handle).toBeDefined();
   handles.push(handle!);
 
-  expect(indexText(root)).toContain("[First](docs/a.md)");
+  expect(indexText(root)).toContain("file: ./docs/a.md");
   expect(existsSync(clawPaths(root).lock)).toBe(true);
 
   await handle!.stop();
@@ -98,7 +98,7 @@ test("startDaemon reindexes on a new doc and refreshes the AGENTS.md block", asy
   handles.push(handle!);
 
   writeFileSync(join(root, "docs/b.md"), DOC("Second", "added live"));
-  expect(await waitFor(() => indexText(root).includes("[Second](docs/b.md)"))).toBe(true);
+  expect(await waitFor(() => indexText(root).includes("file: ./docs/b.md"))).toBe(true);
 
   const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
   expect(agents).toContain("<!-- claw:index -->");
@@ -122,7 +122,7 @@ test("a change made while stopped is picked up by the full rescan on restart", a
 
   const second = await startDaemon(root);
   handles.push(second!);
-  expect(indexText(root)).toContain("[Offline](docs/offline.md)");
+  expect(indexText(root)).toContain("file: ./docs/offline.md");
 });
 
 test("a daemon whose root is deleted shuts down instead of spinning", async () => {
@@ -152,7 +152,7 @@ test("ensureDaemon spawns a daemon, is idempotent, and self-reaps on stale heart
   expect(ensureDaemon(root)).toBe("started");
   expect(await waitFor(() => daemonPid(root) !== undefined)).toBe(true);
   const pid = daemonPid(root);
-  expect(await waitFor(() => indexText(root).includes("[A](docs/a.md)"))).toBe(true);
+  expect(await waitFor(() => indexText(root).includes("file: ./docs/a.md"))).toBe(true);
 
   // Idempotent: a second ensure does not spawn a new daemon.
   expect(ensureDaemon(root)).toBe("running");

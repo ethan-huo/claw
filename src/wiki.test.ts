@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import {
   BLOCK_END,
   BLOCK_START,
-  buildIndexMarkdown,
+  buildIndex,
   buildPointerBlock,
   injectManagedBlock,
   scanDocs,
@@ -73,15 +73,26 @@ test("scans frontmatter docs, skipping reserved, plain, and ignored files", () =
   expect(docs[1]?.title).toBe("B"); // derived from filename
 });
 
-test("builds an index grouped by top-level directory, root first", () => {
+test("builds a YAML-stream index: file path + frontmatter verbatim per doc", () => {
   const docs: DocRecord[] = [
-    { path: "docs/spec.md", type: "Spec", title: "Spec", description: "the spec" },
-    { path: "readme.md", type: "Note", title: "Readme", when: "on start" },
+    {
+      path: "docs/spec.md",
+      type: "Spec",
+      title: "Spec",
+      data: { type: "Spec", title: "Spec", description: "the spec", tags: ["x"] },
+    },
+    { path: "readme.md", type: "Note", title: "Readme", data: { type: "Note", when: "on start" } },
   ];
-  const md = buildIndexMarkdown(docs);
-  expect(md.indexOf("## Root")).toBeLessThan(md.indexOf("## docs"));
-  expect(md).toContain("[Readme](readme.md) — Note _(when: on start)_");
-  expect(md).toContain("[Spec](docs/spec.md) — the spec");
+  const out = buildIndex(docs);
+  expect(out.startsWith("---\n")).toBe(true);
+  expect(out.endsWith("---\n")).toBe(true); // terminated stream
+  expect(out).toContain("file: ./docs/spec.md");
+  expect(out).toContain("description: the spec");
+  expect(out).toContain("when: on start");
+});
+
+test("buildIndex returns empty for no docs", () => {
+  expect(buildIndex([])).toBe("");
 });
 
 test("pointer block inlines entries under the cap", () => {

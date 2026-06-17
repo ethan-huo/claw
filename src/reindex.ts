@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { buildIndexMarkdown, buildPointerBlock, injectManagedBlock, scanDocs } from "./wiki.ts";
+import { buildIndex, buildPointerBlock, injectManagedBlock, scanDocs } from "./wiki.ts";
 
 export type ReindexResult = {
   scanned: number;
@@ -20,7 +20,7 @@ export function reindex(root: string, options: ReindexOptions = {}): ReindexResu
   const wrote: string[] = [];
 
   const indexPath = join(root, "index.md");
-  if (!options.dryRun) writeFileSync(indexPath, buildIndexMarkdown(docs));
+  if (!options.dryRun) writeFileSync(indexPath, buildIndex(docs));
   wrote.push(show(indexPath));
 
   if (options.inject) {

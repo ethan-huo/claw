@@ -9,7 +9,7 @@ import { notFoundError } from "../errors.ts";
 import { parseFrontmatter } from "../frontmatter.ts";
 import { handled } from "../handler.ts";
 import { extractLinks, extractSections, renderToc, structuralSummary } from "../markdown.ts";
-import { buildIndexMarkdown, scanDocs } from "../wiki.ts";
+import { buildIndex, scanDocs } from "../wiki.ts";
 
 // Above this body length the default read returns a structural summary instead
 // of full content, to protect the agent's context budget.
@@ -82,7 +82,7 @@ function readDirectory(dir: string): void {
     synthesized: true,
     note: "No index.md here; generated from frontmatter. Run `claw index` to persist it.",
   });
-  write(synthesized + buildIndexMarkdown(scanDocs(dir)).trimEnd());
+  write(synthesized + buildIndex(scanDocs(dir)).trimEnd());
 }
 
 function pickMeta(data: Frontmatter): Record<string, unknown> {

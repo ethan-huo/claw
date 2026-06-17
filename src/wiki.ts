@@ -1,6 +1,7 @@
 import { Glob } from "bun";
 import { readFileSync } from "node:fs";
 import { join, sep } from "node:path";
+import { stringify } from "yaml";
 
 import { usageError } from "./errors.ts";
 import { parseFrontmatter, type Frontmatter } from "./frontmatter.ts";
@@ -13,6 +14,7 @@ export type DocRecord = {
   when?: string;
   timestamp?: string;
   tags?: string[];
+  data?: Frontmatter; // the doc's raw frontmatter, dumped verbatim into the index
 };
 
 // Build/VCS noise we never want in a knowledge index.
@@ -108,6 +110,7 @@ function toRecord(path: string, data: Frontmatter): DocRecord {
     when: asString(data.when),
     timestamp: asString(data.timestamp),
     tags: Array.isArray(data.tags) ? data.tags.map((tag) => String(tag)) : undefined,
+    data,
   };
 }
 
@@ -127,44 +130,21 @@ function deriveTitle(path: string): string {
     .join(" ");
 }
 
-// An OKF index.md: concepts grouped by their top-level directory, each entry a
-// markdown link carrying the frontmatter description. Written at the scan root,
-// so entry links are root-relative paths.
-export function buildIndexMarkdown(docs: DocRecord[]): string {
-  if (docs.length === 0) return "# Index\n\n_No documents found._\n";
-
-  const groups = new Map<string, DocRecord[]>();
-  for (const doc of docs) {
-    const slash = doc.path.indexOf("/");
-    const group = slash === -1 ? "." : doc.path.slice(0, slash);
-    const bucket = groups.get(group);
-    if (bucket) bucket.push(doc);
-    else groups.set(group, [doc]);
-  }
-
-  const lines = ["# Index", ""];
-  for (const group of sortedGroups(groups.keys())) {
-    lines.push(`## ${group === "." ? "Root" : group}`, "");
-    for (const doc of groups.get(group) ?? []) {
-      lines.push(`- ${entry(doc)}`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n").trimEnd() + "\n";
+// The index is a stream of YAML documents — one per concept — each carrying the
+// doc's path plus its frontmatter verbatim. Simple to produce, trivial to parse:
+// no bespoke markdown, just `file:` prepended to the existing frontmatter.
+export function buildIndex(docs: DocRecord[]): string {
+  if (docs.length === 0) return "";
+  const blocks = docs.map(
+    (doc) => `---\n${stringify({ file: `./${doc.path}`, ...doc.data }).trimEnd()}`,
+  );
+  return `${blocks.join("\n")}\n---\n`;
 }
 
 function entry(doc: DocRecord): string {
   const summary = doc.description ?? doc.type;
   const trigger = doc.when ? ` _(when: ${doc.when})_` : "";
   return `[${doc.title}](${doc.path}) — ${summary}${trigger}`;
-}
-
-function sortedGroups(keys: Iterable<string>): string[] {
-  return [...keys].sort((a, b) => {
-    if (a === ".") return -1; // root docs first
-    if (b === ".") return 1;
-    return a.localeCompare(b);
-  });
 }
 
 // A compact pointer index for injection into an always-loaded file. Pointers
