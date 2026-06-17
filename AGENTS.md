@@ -43,6 +43,7 @@ Four commands — `index`, `read`, `install`, `uninstall`.
 
 ```yaml
 - file: ./skills/claw/SKILL.md
+  size: 1741 tokens, 159 lines
   name: claw
   description: Use when reading or indexing markdown knowledge in a workspace —
     listing what docs exist, navigating a long doc by section, embedding a fresh

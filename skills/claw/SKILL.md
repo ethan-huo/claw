@@ -44,6 +44,11 @@ claw index --dir docs                 # index a specific directory
 claw index --inject AGENTS.md         # embed the index inline in AGENTS.md
 ```
 
+Each entry in the index carries a `size` hint like `"1234 tokens, 56 lines"`
+(token count is a chars/4 estimate, ±15% on prose / markdown). Use it to
+decide before reading: a small doc → read the whole body; a large doc →
+go straight to `claw read … --toc` and drill in with `--section`.
+
 Two delivery modes, one underlying scan:
 
 - **stdout (default)** — call `claw index` whenever you need a fresh
