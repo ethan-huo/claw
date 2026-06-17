@@ -121,16 +121,22 @@ export function touchHeartbeat(root: string): void {
 function acquireLock(lock: string): boolean {
   const identity = `${process.pid}\n${procStartTime(process.pid) ?? ""}`;
   for (let attempt = 0; attempt < 2; attempt++) {
+    let fd: number | undefined;
     try {
-      const fd = openSync(lock, "wx"); // O_CREAT | O_EXCL | O_WRONLY
+      fd = openSync(lock, "wx"); // O_CREAT | O_EXCL | O_WRONLY
       writeSync(fd, identity);
-      closeSync(fd);
       return true;
     } catch (error) {
+      if (fd !== undefined) {
+        rmSync(lock, { force: true }); // created but failed to write — don't leave a half-lock
+        throw error;
+      }
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       const owner = readLock(lock);
       if (owner && isAlive(owner.pid) && procStartTime(owner.pid) === owner.start) return false;
       rmSync(lock, { force: true }); // stale — reclaim and retry
+    } finally {
+      if (fd !== undefined) closeSync(fd);
     }
   }
   return false;
@@ -178,8 +184,13 @@ export async function startDaemon(root: string): Promise<DaemonHandle | undefine
     stopping = true;
     if (reaper) clearInterval(reaper);
     clearTimeout(debounce);
-    if (subscription) await subscription.unsubscribe().catch(() => {});
+    // Release the lock and arm `stopped` regardless of the watcher: a hung
+    // unsubscribe must never keep the daemon alive or holding its lock. The
+    // process exits right after `stopped`, which tears the watcher down anyway.
     if (releaseLock && ownsLock()) rmSync(paths.lock, { force: true });
+    if (subscription) {
+      await Promise.race([subscription.unsubscribe().catch(() => {}), Bun.sleep(2000)]);
+    }
     resolveStopped();
   };
 
@@ -195,7 +206,13 @@ export async function startDaemon(root: string): Promise<DaemonHandle | undefine
         }
         if (!events.some((event) => relevant(event.path, root))) return;
         clearTimeout(debounce);
-        debounce = setTimeout(build, DEBOUNCE_MS);
+        debounce = setTimeout(() => {
+          // If a racing daemon won the lock, yield on the first activity rather
+          // than waiting a full reaper tick — plain-file locks can't perfectly
+          // arbitrate, so we self-correct here.
+          if (!ownsLock()) return void shutdown(false);
+          build();
+        }, DEBOUNCE_MS);
       },
       { ignore: IGNORE },
     );
@@ -245,8 +262,18 @@ export function ensureDaemon(root: string): EnsureResult {
   return "started";
 }
 
+// Before signalling, confirm the pid really is this repo's daemon by its command
+// line — belt-and-suspenders against a reused pid that matched on start time.
+function isDaemonProcess(pid: number, root: string): boolean {
+  const result = Bun.spawnSync(["ps", "-o", "command=", "-p", String(pid)], { stderr: "ignore" });
+  if (result.exitCode !== 0) return false;
+  const command = result.stdout.toString();
+  return command.includes("daemon run") && command.includes(root);
+}
+
 export function stopDaemon(root: string): number | undefined {
   const pid = daemonPid(root);
-  if (pid) process.kill(pid, "SIGTERM");
+  if (!pid || !isDaemonProcess(pid, root)) return undefined;
+  process.kill(pid, "SIGTERM");
   return pid;
 }

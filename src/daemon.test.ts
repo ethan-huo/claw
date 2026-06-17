@@ -143,6 +143,22 @@ test("a daemon whose root is deleted shuts down instead of spinning", async () =
   expect(stopped).toBe(true);
 });
 
+test("a daemon that loses its lock yields on the next change", async () => {
+  const root = tmpRepo({ "docs/a.md": DOC("A", "a") });
+  const handle = await startDaemon(root);
+  handles.push(handle!);
+
+  // Simulate a racing daemon that won the lock (different pid).
+  writeFileSync(clawPaths(root).lock, "999999\nfake start");
+  writeFileSync(join(root, "docs/b.md"), DOC("B", "b")); // activity → it should notice
+
+  const stopped = await Promise.race([
+    handle!.stopped.then(() => true),
+    Bun.sleep(8000).then(() => false),
+  ]);
+  expect(stopped).toBe(true);
+});
+
 test("ensureDaemon spawns a daemon, is idempotent, and self-reaps on stale heartbeat", async () => {
   process.env.CLAW_ENTRY = ENTRY;
   process.env.CLAW_TTL_MS = "1500";
