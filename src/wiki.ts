@@ -38,9 +38,20 @@ export const BLOCK_END = "<!-- /claw:index -->";
 const POINTER_CAP = 60;
 
 export function scanDocs(root: string): DocRecord[] {
-  const records: DocRecord[] = [];
+  const all = listMarkdown(root);
 
-  for (const rel of listMarkdown(root)) {
+  // A directory containing a SKILL.md is a skill bundle — the skill mechanism's
+  // territory. claw cedes the whole bundle (the SKILL.md and its references) and
+  // indexes nothing inside it.
+  const skillDirs = all
+    .filter((rel) => rel.endsWith("/SKILL.md"))
+    .map((rel) => rel.slice(0, -"SKILL.md".length)); // "skills/foo/"
+  const inSkillBundle = (rel: string): boolean =>
+    rel.split("/").pop() === "SKILL.md" || skillDirs.some((dir) => rel.startsWith(dir));
+
+  const records: DocRecord[] = [];
+  for (const rel of all) {
+    if (inSkillBundle(rel)) continue;
     const base = rel.split("/").pop() ?? "";
     if (RESERVED.has(base)) continue;
 
