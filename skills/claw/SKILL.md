@@ -41,12 +41,14 @@ re-reading the whole file.
 ```bash
 claw index                            # write index.md for the current directory tree
 claw index --dir docs                 # index a specific directory
-claw index --append AGENTS.md         # also inject a pointer block into an always-loaded file
-claw index --watch                    # rebuild on every markdown change
+claw index --inject AGENTS.md         # also inject a pointer block into an always-loaded file
 claw index --dry-run                  # report what would change, write nothing
 ```
 
-`--append` maintains a `<!-- claw:index -->…<!-- /claw:index -->` block of
+(To rebuild automatically on every change, use the daemon below instead of
+re-running `claw index`.)
+
+`--inject` maintains a `<!-- claw:index -->…<!-- /claw:index -->` block of
 pointers (path + description + `when`), so an always-loaded file gains ambient
 awareness of the wiki without inlining doc bodies. The block stays
 pointer-only and collapses to a single line once it grows past a soft cap.

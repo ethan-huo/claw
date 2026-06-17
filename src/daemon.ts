@@ -153,11 +153,11 @@ export async function startDaemon(root: string): Promise<DaemonHandle | undefine
 
   const ownsLock = (): boolean => readLock(paths.lock)?.pid === process.pid;
   const agentsPath = join(root, "AGENTS.md");
-  // Resolve the append target per build: an AGENTS.md created after startup
+  // Resolve the inject target per build: an AGENTS.md created after startup
   // still gets its pointer block on the next change.
   const build = (): void => {
     try {
-      reindex(root, { append: existsSync(agentsPath) ? agentsPath : undefined });
+      reindex(root, { inject: existsSync(agentsPath) ? agentsPath : undefined });
     } catch (error) {
       process.stderr.write(`[claw] reindex failed: ${String(error)}\n`);
     }

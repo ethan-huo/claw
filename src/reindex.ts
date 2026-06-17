@@ -9,7 +9,7 @@ export type ReindexResult = {
 };
 
 export type ReindexOptions = {
-  append?: string; // absolute path to inject a pointer block into (e.g. AGENTS.md)
+  inject?: string; // absolute path to inject a pointer block into (e.g. AGENTS.md)
   dryRun?: boolean;
 };
 
@@ -23,11 +23,11 @@ export function reindex(root: string, options: ReindexOptions = {}): ReindexResu
   if (!options.dryRun) writeFileSync(indexPath, buildIndexMarkdown(docs));
   wrote.push(show(indexPath));
 
-  if (options.append) {
-    const previous = existsSync(options.append) ? readFileSync(options.append, "utf8") : "";
+  if (options.inject) {
+    const previous = existsSync(options.inject) ? readFileSync(options.inject, "utf8") : "";
     const next = injectManagedBlock(previous, buildPointerBlock(docs));
-    if (!options.dryRun) writeFileSync(options.append, next);
-    wrote.push(show(options.append));
+    if (!options.dryRun) writeFileSync(options.inject, next);
+    wrote.push(show(options.inject));
   }
 
   return { scanned: docs.length, wrote };

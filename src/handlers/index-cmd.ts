@@ -20,19 +20,19 @@ export const indexHandlers: Pick<AppHandlers, "index"> = {
       });
     }
 
-    // Resolve --append against the scan root and keep it inside the tree — the
+    // Resolve --inject against the scan root and keep it inside the tree — the
     // pointer block belongs with the docs it indexes, not some unrelated file.
-    let append: string | undefined;
-    if (input.append) {
-      append = resolve(root, input.append);
-      if (relative(root, append).startsWith("..")) {
-        throw usageError("--append must stay inside the indexed directory.", {
-          hint: "Pass a path relative to the scan root, e.g. --append AGENTS.md.",
+    let inject: string | undefined;
+    if (input.inject) {
+      inject = resolve(root, input.inject);
+      if (relative(root, inject).startsWith("..")) {
+        throw usageError("--inject must stay inside the indexed directory.", {
+          hint: "Pass a path relative to the scan root, e.g. --inject AGENTS.md.",
         });
       }
     }
 
-    const result = reindex(root, { append, dryRun: input.dryRun ?? false });
+    const result = reindex(root, { inject, dryRun: input.dryRun ?? false });
 
     printResult(
       { ok: true, scanned: result.scanned, wrote: result.wrote, dry_run: input.dryRun ?? false },

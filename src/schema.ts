@@ -19,13 +19,13 @@ export const schema = {
     .meta({
       description:
         "Scan a directory of markdown docs and (re)generate an OKF index.md from their frontmatter.",
-      examples: ["claw index", "claw index --append AGENTS.md", "claw index --dir docs"],
+      examples: ["claw index", "claw index --inject AGENTS.md", "claw index --dir docs"],
     })
     .input(
       s(
         v.object({
           dir: v.optional(v.string()), // directory to scan; defaults to cwd
-          append: v.optional(v.string()), // also inject a pointer block into this file
+          inject: v.optional(v.string()), // inject/refresh a pointer block in this file
           dryRun: v.optional(v.boolean()), // report changes without writing
         }),
       ),

@@ -53,7 +53,7 @@ test("--schema exposes both commands", async () => {
 
 test("index writes index.md and injects a pointer block", async () => {
   const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
-  const { stdout, exitCode, stderr } = await claw(root, "index", "--append", "AGENTS.md");
+  const { stdout, exitCode, stderr } = await claw(root, "index", "--inject", "AGENTS.md");
   expect(exitCode, stderr).toBe(0);
   expect(stdout).toContain("scanned: 1");
 
