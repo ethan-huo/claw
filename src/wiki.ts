@@ -38,13 +38,10 @@ export const BLOCK_END = "<!-- /claw:index -->";
 const POINTER_CAP = 60;
 
 export function scanDocs(root: string): DocRecord[] {
-  const glob = new Glob("**/*.md");
   const records: DocRecord[] = [];
 
-  for (const rel of glob.scanSync({ cwd: root, dot: true, onlyFiles: true })) {
-    const segments = rel.split(sep);
-    if (segments.some((segment) => IGNORED_SEGMENTS.has(segment))) continue;
-    const base = segments[segments.length - 1] ?? "";
+  for (const rel of listMarkdown(root)) {
+    const base = rel.split("/").pop() ?? "";
     if (RESERVED.has(base)) continue;
 
     let text: string;
@@ -60,11 +57,41 @@ export function scanDocs(root: string): DocRecord[] {
     const parsed = parseFrontmatter(text);
     if (!parsed.hasFrontmatter) continue;
 
-    records.push(toRecord(segments.join("/"), parsed.data));
+    records.push(toRecord(rel, parsed.data));
   }
 
   records.sort((a, b) => a.path.localeCompare(b.path));
   return records;
+}
+
+// Enumerate candidate markdown as posix paths relative to root. In a git repo
+// this is the authoritative `.gitignore`-respecting set (tracked + untracked,
+// minus ignored); the daemon's coarse watch ignore never has to be exact. Falls
+// back to a glob with a hardcoded ignore list outside a repo.
+function listMarkdown(root: string): string[] {
+  const git = Bun.spawnSync(
+    [
+      "git",
+      "-C",
+      root,
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      "*.md",
+    ],
+    { stderr: "ignore" },
+  );
+  if (git.exitCode === 0) {
+    return [...new Set(git.stdout.toString().split("\0").filter(Boolean))];
+  }
+
+  const glob = new Glob("**/*.md");
+  return [...glob.scanSync({ cwd: root, dot: true, onlyFiles: true })]
+    .filter((rel) => !rel.split(sep).some((segment) => IGNORED_SEGMENTS.has(segment)))
+    .map((rel) => rel.split(sep).join("/"));
 }
 
 function toRecord(path: string, data: Frontmatter): DocRecord {

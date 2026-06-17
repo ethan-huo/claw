@@ -55,13 +55,16 @@ export const schema = {
       install: c
         .meta({
           description:
-            "Wire `claw daemon ensure` into this repo's agent hooks (.claude/settings.json), creating or merging the file. Run once to enable auto-indexing.",
-          examples: ["claw daemon install"],
+            "Wire `claw daemon ensure` into this repo's agent hooks (default .claude/settings.local.json; --project for the shared settings.json). Creates or merges the file. Run once to enable auto-indexing.",
+          examples: ["claw daemon install", "claw daemon install --project"],
         })
-        .input(s(v.object({}))),
+        .input(s(v.object({ project: v.optional(v.boolean()) }))),
       uninstall: c
-        .meta({ description: "Remove claw's hooks from this repo's .claude/settings.json." })
-        .input(s(v.object({}))),
+        .meta({
+          description:
+            "Remove claw's hooks from this repo's agent settings (--project for the shared file).",
+        })
+        .input(s(v.object({ project: v.optional(v.boolean()) }))),
       ensure: c
         .meta({
           description:

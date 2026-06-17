@@ -19,7 +19,7 @@ export const daemonHandlers: Pick<AppHandlers, "daemon"> = {
   daemon: {
     install: handled(async (options) => {
       const root = gitRoot() ?? process.cwd();
-      const result = installHooks(root);
+      const result = installHooks(root, { project: options.input.project });
       printResult(
         {
           ok: true,
@@ -34,7 +34,7 @@ export const daemonHandlers: Pick<AppHandlers, "daemon"> = {
 
     uninstall: handled(async (options) => {
       const root = gitRoot() ?? process.cwd();
-      const result = uninstallHooks(root);
+      const result = uninstallHooks(root, { project: options.input.project });
       printResult(
         { ok: true, settings: result.settingsPath, removed: result.removed },
         options.context.format,

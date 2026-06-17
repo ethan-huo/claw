@@ -58,9 +58,10 @@ authoritative.
   `.git/**`, `dist/**`, plus top-level `.gitignore` dirs) prune entire subtrees
   **in C++ before any event reaches JS**. Events are throttled and coalesced in
   C++, so a `git checkout` or `npm install` storm cannot overwhelm the JS thread.
-- **Index layer (precise, authoritative):** the re-index itself enumerates docs
-  via `git ls-files` ∪ `git ls-files --others --exclude-standard`, filtered to
-  `*.md`. This is exact `.gitignore` semantics, for free.
+- **Index layer (precise, authoritative):** `scanDocs` enumerates docs via
+  `git ls-files --cached --others --exclude-standard -- '*.md'` (tracked +
+  untracked, minus ignored), falling back to a glob outside a git repo. This is
+  exact `.gitignore` semantics, for free — implemented, not deferred.
 
 Because git does the precise filtering at index time, the watcher's glob ignore
 only needs to be _roughly_ right. An imperfect `.gitignore`→glob translation
@@ -70,8 +71,8 @@ output.** Correctness is pinned to the git layer.
 
 Why `@parcel/watcher` over `node:fs` watch: `ignore` is a first-class, natively
 pruned subscribe option (the filter is the first operator in the pipeline, not an
-afterthought), C++ throttling immunizes against install storms, and it ships the
-snapshot API below. Verified loading and pruning under Bun on macOS arm64.
+afterthought), and C++ throttling immunizes against install storms. Verified
+loading and pruning under Bun on macOS arm64.
 
 ## 3. Liveness by heartbeat TTL — not by tracking agent processes
 
@@ -83,8 +84,7 @@ host-specific. Instead:
   `PostToolUse`) runs `claw daemon ensure`, which (a) idempotently ensures the
   daemon is up and (b) `touch`es a heartbeat file.
 - The daemon self-checks the heartbeat on a **low-frequency** timer (~10 min). If
-  `now - mtime(heartbeat) > TTL` (~30 min), no one is active → it writes a final
-  snapshot and exits.
+  `now - mtime(heartbeat) > TTL` (~30 min), no one is active → it exits.
 
 Properties:
 
@@ -100,19 +100,17 @@ Properties:
 > Eager teardown, if ever wanted, is an optional add-on: a low-frequency scan for
 > live agent processes whose cwd is under the root. Not in v1.
 
-## 4. Snapshot closes the gap a dead daemon would miss
+## 4. Startup does a full rescan — no snapshot bookkeeping
 
-`@parcel/watcher` can compute what changed while the program was **not running**:
-`writeSnapshot(root, snap)` on exit, `getEventsSince(root, snap)` on start.
+An earlier draft used `@parcel/watcher`'s snapshot API (`writeSnapshot` /
+`getEventsSince`) to catch changes missed while the daemon was dead. We dropped
+it: a reindex is already a **full** `scanDocs(root)`, not an incremental update,
+so a snapshot only gates the boolean "should I reindex on startup?" — and the
+answer is always yes. Doing one full reindex on startup catches every offline
+change for free, with no extra persisted state and no failure surface.
 
-- Daemon writes a snapshot before exiting (TTL or clean stop).
-- On the next `claw daemon ensure`, the daemon first replays
-  `getEventsSince` to catch up everything that changed during its downtime — no
-  full filesystem crawl — then enters live subscription.
-
-Heartbeat TTL (die freely) + snapshot (dying loses nothing) compose exactly: the
-daemon can be reaped or crash at any time with **zero missed changes** and no
-cold-start rescan.
+This is the "least machinery" call: the snapshot bought nothing a one-line full
+rescan doesn't already give, given the index is regenerated wholesale anyway.
 
 ## 5. Hook wiring
 
@@ -136,11 +134,13 @@ idempotent: resolve the git root, ensure the daemon, touch the heartbeat.
 
 # Command contract
 
-| Command              | Purpose                                                                                                                                  |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `claw daemon ensure` | Resolve git root; start the daemon if absent (idempotent, lock-guarded); replay `getEventsSince`; touch heartbeat. The hook entry point. |
-| `claw daemon status` | Report whether a daemon owns this repo: root, pid, uptime, heartbeat age, watched doc count.                                             |
-| `claw daemon stop`   | Stop the daemon for this repo (eager teardown; writes a final snapshot).                                                                 |
+| Command                 | Purpose                                                                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `claw daemon install`   | Wire `claw daemon ensure` into agent hooks. Defaults to the gitignored `.claude/settings.local.json`; `--project` for shared. |
+| `claw daemon ensure`    | Resolve git root; start the daemon if absent (idempotent, lock-guarded); touch heartbeat. The hook entry point.               |
+| `claw daemon status`    | Report whether a daemon owns this repo: root, pid, heartbeat age, watched doc count.                                          |
+| `claw daemon stop`      | Stop the daemon for this repo (eager teardown).                                                                               |
+| `claw daemon uninstall` | Remove claw's hooks from the agent settings.                                                                                  |
 
 `ensure` outside a git repo is a no-op that exits 0 (a non-repo directory is not a
 daemon site) — hooks fire everywhere and must not error there.
@@ -151,26 +151,27 @@ All daemon state lives under `.claw/` at the git root (add to `.gitignore`):
 
 ```
 <git-root>/.claw/
-├── daemon.lock      # pidfile of the daemon itself; staleness checked via kill(pid, 0)
+├── daemon.lock      # pid + process start time of the daemon itself
 ├── heartbeat        # mtime = last time any session was active
-└── snapshot         # @parcel/watcher snapshot for getEventsSince
+└── daemon.log       # detached daemon's stdout/stderr
 ```
 
-The lock holds the **daemon's own** pid — `kill(pid, 0)` reliably distinguishes a
-live owner from a stale lock. This is the one piece of process logic that remains,
-and it is rock-solid, unlike tracking agent PIDs.
+The lock holds the daemon's **pid + start time** — `kill(pid, 0)` plus a
+start-time match distinguishes a live owner from a stale lock _and_ from an
+unrelated process that reused the pid after a crash. This is the one piece of
+process logic that remains, and it is robust, unlike tracking agent PIDs.
 
 # Lifecycle
 
 ```
 hook fires → claw daemon ensure
   ├─ root = git rev-parse --show-toplevel   (none → exit 0, no-op)
-  ├─ acquire .claw/daemon.lock (O_EXCL)
-  │    ├─ got it, or lock pid dead → spawn detached daemon:
-  │    │     getEventsSince(snapshot) → re-index the gap
-  │    │     subscribe(root, { ignore }) → debounce → claw index
-  │    │     every ~10 min: heartbeat older than TTL? → writeSnapshot + exit
-  │    └─ lock held by a live pid → daemon already running, do nothing
+  ├─ live daemon owns the lock? → do nothing
+  ├─ else spawn detached daemon:
+  │     acquire .claw/daemon.lock (O_EXCL, pid + start time)
+  │     full reindex on startup → catches anything changed while down
+  │     subscribe(root, { ignore }) → debounce → reindex
+  │     every ~10 min: repo gone / lost lock / heartbeat past TTL? → exit
   └─ touch .claw/heartbeat
 ```
 
@@ -178,7 +179,7 @@ hook fires → claw daemon ensure
 
 | Failure                     | Outcome                                                                                      |
 | --------------------------- | -------------------------------------------------------------------------------------------- |
-| Daemon crash / `SIGKILL`    | Stale lock; next `ensure` reclaims via `kill(pid,0)`; `getEventsSince` replays the gap.      |
+| Daemon crash / `SIGKILL`    | Stale lock; next `ensure` reclaims via pid+start-time check; startup rescan replays the gap. |
 | `SessionEnd` never fires    | Heartbeat goes stale; daemon self-exits within ≤ TTL + tick.                                 |
 | Two sessions start at once  | `O_EXCL` lock elects one daemon; the loser just touches the heartbeat.                       |
 | Repo deleted under a daemon | Watch callback and reaper see the vanished `.claw` dir and exit — never spin on a dead path. |
@@ -191,5 +192,7 @@ hook fires → claw daemon ensure
 - Eager teardown via live-agent-process scan (only if ≤ 40 min reaping ever feels
   too slow).
 - Tuning TTL / tick / debounce intervals against real usage.
-- Whether `claw index` should adopt the `git ls-files` enumeration now, ahead of
-  the daemon, to unify the filter layer early.
+- Whether to keep the daemon at all vs. running `claw index` synchronously from
+  the same hooks. The daemon earns its place only for changes made _outside_ the
+  agent's own edits (other editors, another agent, `git pull`); for the
+  agent-is-sole-writer case, synchronous indexing is simpler. Revisit with data.

@@ -1,4 +1,4 @@
-import watcher, { type AsyncSubscription, type Event } from "@parcel/watcher";
+import watcher, { type AsyncSubscription } from "@parcel/watcher";
 import {
   closeSync,
   existsSync,
@@ -20,8 +20,8 @@ const TICK_MS = Number(process.env.CLAW_TICK_MS ?? 10 * 60 * 1000); // heartbeat
 const DEBOUNCE_MS = Number(process.env.CLAW_DEBOUNCE_MS ?? 150);
 
 // Coarse performance prune for the watch layer. Precise filtering is git's job
-// at index time; this only needs to be roughly right. `.claw/**` is critical:
-// our own snapshot/heartbeat writes must not feed back as events.
+// at index time (scanDocs uses `git ls-files`); this only needs to be roughly
+// right. `.claw/**` is critical: our own writes must not feed back as events.
 const IGNORE = [
   "node_modules/**",
   ".git/**",
@@ -36,7 +36,6 @@ export type ClawPaths = {
   dir: string;
   lock: string;
   heartbeat: string;
-  snapshot: string;
   log: string;
 };
 
@@ -52,7 +51,6 @@ export function clawPaths(root: string): ClawPaths {
     dir,
     lock: join(dir, "daemon.lock"),
     heartbeat: join(dir, "heartbeat"),
-    snapshot: join(dir, "snapshot.txt"),
     log: join(dir, "daemon.log"),
   };
 }
@@ -72,19 +70,34 @@ export function isAlive(pid: number): boolean {
   }
 }
 
-function lockPid(lock: string): number | undefined {
-  try {
-    const pid = Number(readFileSync(lock, "utf8").trim());
-    return Number.isInteger(pid) ? pid : undefined;
-  } catch {
-    return undefined;
-  }
+// Process start time, used to tell a live daemon from an unrelated process that
+// happened to reuse its pid after a crash.
+function procStartTime(pid: number): string | undefined {
+  const result = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)], { stderr: "ignore" });
+  if (result.exitCode !== 0) return undefined;
+  return result.stdout.toString().trim() || undefined;
 }
 
-// The pid of a live daemon owning this repo, or undefined.
+type LockOwner = { pid: number; start: string };
+
+function readLock(lock: string): LockOwner | undefined {
+  try {
+    const [pidLine, start] = readFileSync(lock, "utf8").split("\n");
+    const pid = Number((pidLine ?? "").trim());
+    if (Number.isInteger(pid) && start) return { pid, start: start.trim() };
+  } catch {
+    // missing or malformed
+  }
+  return undefined;
+}
+
+// The pid of a live daemon owning this repo, or undefined. Verifies the lock
+// holder is the *same* process instance (pid + start time), so a reused pid
+// cannot masquerade as a live daemon and wedge `ensure` forever.
 export function daemonPid(root: string): number | undefined {
-  const pid = lockPid(clawPaths(root).lock);
-  return pid && isAlive(pid) ? pid : undefined;
+  const owner = readLock(clawPaths(root).lock);
+  if (!owner || !isAlive(owner.pid)) return undefined;
+  return procStartTime(owner.pid) === owner.start ? owner.pid : undefined;
 }
 
 export function heartbeatAge(root: string): number {
@@ -101,45 +114,54 @@ export function touchHeartbeat(root: string): void {
   writeFileSync(paths.heartbeat, String(Date.now()));
 }
 
-// Atomic O_EXCL lock holding the daemon's own pid. Reclaims a stale lock whose
-// pid is dead. Returns false when a live daemon already owns the repo.
+// Atomic O_EXCL lock holding pid + start time. Reclaims a lock whose owner is
+// no longer a live instance. Returns false when a live daemon already owns it.
 function acquireLock(lock: string): boolean {
+  const identity = `${process.pid}\n${procStartTime(process.pid) ?? ""}`;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const fd = openSync(lock, "wx"); // O_CREAT | O_EXCL | O_WRONLY
-      writeSync(fd, String(process.pid));
+      writeSync(fd, identity);
       closeSync(fd);
       return true;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      const pid = lockPid(lock);
-      if (pid && isAlive(pid)) return false;
+      const owner = readLock(lock);
+      if (owner && isAlive(owner.pid) && procStartTime(owner.pid) === owner.start) return false;
       rmSync(lock, { force: true }); // stale — reclaim and retry
     }
   }
   return false;
 }
 
-function relevant(path: string, root: string, appendTarget: string | undefined): boolean {
+// React only to markdown that isn't our own output. parcel gives absolute paths.
+function relevant(path: string, root: string): boolean {
   if (!path.endsWith(".md")) return false;
-  if (basename(path) === "index.md") return false; // our own output
-  if (appendTarget && path === appendTarget) return false; // our own output
+  if (basename(path) === "index.md") return false; // generated index
+  if (path === join(root, "AGENTS.md")) return false; // pointer-block host
   return true;
 }
 
 // Run the watch loop in-process. Returns undefined if another daemon already
-// owns the repo. The handle's stop() unsubscribes, snapshots, and releases the
-// lock. Used both by `claw daemon run` and directly by tests.
+// owns the repo. The handle's stop() unsubscribes and releases the lock; its
+// `stopped` promise resolves on stop for ANY reason. Used by `claw daemon run`
+// and directly by tests.
 export async function startDaemon(root: string): Promise<DaemonHandle | undefined> {
   const paths = clawPaths(root);
   mkdirSync(paths.dir, { recursive: true });
   if (!acquireLock(paths.lock)) return undefined;
 
-  const ownsLock = (): boolean => lockPid(paths.lock) === process.pid;
-  const appendTarget = existsSync(join(root, "AGENTS.md")) ? join(root, "AGENTS.md") : undefined;
-  const build = (): void => void reindex(root, { append: appendTarget });
-  const snapshot = (): Promise<string> =>
-    watcher.writeSnapshot(root, paths.snapshot, { ignore: IGNORE });
+  const ownsLock = (): boolean => readLock(paths.lock)?.pid === process.pid;
+  const agentsPath = join(root, "AGENTS.md");
+  // Resolve the append target per build: an AGENTS.md created after startup
+  // still gets its pointer block on the next change.
+  const build = (): void => {
+    try {
+      reindex(root, { append: existsSync(agentsPath) ? agentsPath : undefined });
+    } catch (error) {
+      process.stderr.write(`[claw] reindex failed: ${String(error)}\n`);
+    }
+  };
 
   let subscription: AsyncSubscription | undefined;
   let debounce: ReturnType<typeof setTimeout> | undefined;
@@ -150,70 +172,40 @@ export async function startDaemon(root: string): Promise<DaemonHandle | undefine
     resolveStopped = resolve;
   });
 
-  // releaseLock=false is used when another daemon has taken over the lock: we
-  // exit without touching what is now its lock file.
   const shutdown = async (releaseLock: boolean): Promise<void> => {
     if (stopping) return;
     stopping = true;
     if (reaper) clearInterval(reaper);
     clearTimeout(debounce);
     if (subscription) await subscription.unsubscribe().catch(() => {});
-    if (releaseLock && ownsLock()) {
-      try {
-        await snapshot();
-      } catch {
-        // best-effort
-      }
-      rmSync(paths.lock, { force: true });
-    }
+    if (releaseLock && ownsLock()) rmSync(paths.lock, { force: true });
     resolveStopped();
   };
 
-  try {
-    // Catch up on changes missed while no daemon was running, then re-snapshot.
-    if (existsSync(paths.snapshot)) {
-      let missed: Event[] = [];
-      try {
-        missed = await watcher.getEventsSince(root, paths.snapshot, { ignore: IGNORE });
-      } catch {
-        missed = [{ path: join(root, "force.md"), type: "update" }]; // unreadable → rebuild
-      }
-      if (missed.some((event) => relevant(event.path, root, appendTarget))) build();
-    } else {
-      build(); // first run for this repo
-    }
-    await snapshot();
+  build(); // a full scan on startup also catches anything changed while we were down
 
+  try {
     subscription = await watcher.subscribe(
       root,
       (error, events) => {
         if (error || !existsSync(paths.dir)) {
-          void shutdown(false); // watcher failed or our repo vanished — stop now
+          void shutdown(false); // watcher failed or the repo vanished — stop now
           return;
         }
-        if (!events.some((event) => relevant(event.path, root, appendTarget))) return;
+        if (!events.some((event) => relevant(event.path, root))) return;
         clearTimeout(debounce);
-        debounce = setTimeout(() => {
-          try {
-            build();
-            void snapshot();
-          } catch {
-            // a transient bad doc must not kill the daemon
-          }
-        }, DEBOUNCE_MS);
+        debounce = setTimeout(build, DEBOUNCE_MS);
       },
       { ignore: IGNORE },
     );
   } catch (error) {
-    // Release our lock if startup failed after we acquired it.
-    if (subscription) await subscription.unsubscribe().catch(() => {});
     if (ownsLock()) rmSync(paths.lock, { force: true });
     throw error;
   }
 
   reaper = setInterval(() => {
     if (!existsSync(paths.dir)) {
-      void shutdown(false); // repo/state directory is gone — exit, nothing to clean
+      void shutdown(false); // repo/state gone — exit, nothing to clean
     } else if (!ownsLock()) {
       void shutdown(false); // another daemon won the lock — yield to it
     } else if (heartbeatAge(root) > TTL_MS) {

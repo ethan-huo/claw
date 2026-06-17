@@ -31,8 +31,13 @@ export type UninstallResult = {
   removed: string[];
 };
 
-function settingsPath(root: string): string {
-  return join(root, ".claude", "settings.json");
+export type HookScope = { project?: boolean };
+
+// Default to the user-local, gitignored file: a background daemon is a personal
+// opt-in, not something to force on every collaborator via committed config.
+// `--project` targets the shared settings.json.
+function settingsPath(root: string, project: boolean | undefined): string {
+  return join(root, ".claude", project ? "settings.json" : "settings.local.json");
 }
 
 function loadSettings(path: string): { settings: Settings; created: boolean } {
@@ -57,8 +62,8 @@ function wired(groups: HookGroup[] | undefined): boolean {
   );
 }
 
-export function installHooks(root: string): InstallResult {
-  const path = settingsPath(root);
+export function installHooks(root: string, scope: HookScope = {}): InstallResult {
+  const path = settingsPath(root, scope.project);
   const { settings, created } = loadSettings(path);
   const hooks = (settings.hooks ??= {});
 
@@ -81,8 +86,8 @@ export function installHooks(root: string): InstallResult {
   return { settingsPath: path, created, added, alreadyPresent };
 }
 
-export function uninstallHooks(root: string): UninstallResult {
-  const path = settingsPath(root);
+export function uninstallHooks(root: string, scope: HookScope = {}): UninstallResult {
+  const path = settingsPath(root, scope.project);
   if (!existsSync(path)) return { settingsPath: path, removed: [] };
 
   const { settings } = loadSettings(path);

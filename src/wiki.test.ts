@@ -30,6 +30,19 @@ function fixture(files: Record<string, string>): string {
   return root;
 }
 
+test("in a git repo, honors .gitignore exactly (no leaked ignored docs)", () => {
+  const root = fixture({
+    ".gitignore": "vendor/\nsecret/\n",
+    "docs/pub.md": "---\ntype: Note\ntitle: Public\n---\nx",
+    "vendor/v.md": "---\ntype: Note\ntitle: Vendor\n---\nx",
+    "secret/s.md": "---\ntype: Note\ntitle: Secret\n---\nx",
+  });
+  Bun.spawnSync(["git", "init", "-q"], { cwd: root });
+
+  const titles = scanDocs(root).map((d) => d.title);
+  expect(titles).toEqual(["Public"]); // vendor/secret excluded via git ls-files
+});
+
 test("scans frontmatter docs, skipping reserved, plain, and ignored files", () => {
   const root = fixture({
     "a.md": "---\ntype: Note\ntitle: A\ndescription: first\n---\nbody",

@@ -90,7 +90,6 @@ test("startDaemon builds the index on start and releases the lock on stop", asyn
   await handle!.stop();
   handles.length = 0;
   expect(existsSync(clawPaths(root).lock)).toBe(false);
-  expect(existsSync(clawPaths(root).snapshot)).toBe(true);
 });
 
 test("startDaemon reindexes on a new doc and refreshes the AGENTS.md block", async () => {
@@ -114,10 +113,10 @@ test("only one daemon owns a repo: a second startDaemon returns undefined", asyn
   expect(second).toBeUndefined();
 });
 
-test("snapshot catch-up: a change made while stopped is picked up on restart", async () => {
+test("a change made while stopped is picked up by the full rescan on restart", async () => {
   const root = tmpRepo({ "docs/a.md": DOC("A", "a") });
   const first = await startDaemon(root);
-  await first!.stop(); // writes a snapshot
+  await first!.stop();
 
   writeFileSync(join(root, "docs/offline.md"), DOC("Offline", "changed while dead"));
 
