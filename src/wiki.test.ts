@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { parse } from "yaml";
 
 import {
   BLOCK_END,
@@ -73,7 +74,7 @@ test("scans frontmatter docs, skipping reserved, plain, and ignored files", () =
   expect(docs[1]?.title).toBe("B"); // derived from filename
 });
 
-test("builds a markdown index: heading, then file + frontmatter per doc, rule-separated", () => {
+test("builds a YAML list: file + frontmatter verbatim per doc", () => {
   const docs: DocRecord[] = [
     {
       path: "docs/spec.md",
@@ -84,15 +85,18 @@ test("builds a markdown index: heading, then file + frontmatter per doc, rule-se
     { path: "readme.md", type: "Note", title: "Readme", data: { type: "Note", when: "on start" } },
   ];
   const out = buildIndex(docs);
-  expect(out.startsWith("# index.md\n")).toBe(true);
-  expect(out).toContain("file: ./docs/spec.md");
+  expect(out).toContain("- file: ./docs/spec.md"); // a YAML sequence item
   expect(out).toContain("description: the spec");
   expect(out).toContain("when: on start");
-  expect(out).toContain("\n\n---\n\n"); // a divider between entries, with blank lines
+  // round-trips to structured data
+  expect(parse(out)).toEqual([
+    { file: "./docs/spec.md", type: "Spec", title: "Spec", description: "the spec", tags: ["x"] },
+    { file: "./readme.md", type: "Note", when: "on start" },
+  ]);
 });
 
-test("buildIndex emits just the heading for no docs", () => {
-  expect(buildIndex([])).toBe("# index.md\n");
+test("buildIndex emits an empty YAML list for no docs", () => {
+  expect(parse(buildIndex([]))).toEqual([]);
 });
 
 test("pointer block inlines entries under the cap", () => {

@@ -60,7 +60,7 @@ const DOC = (title: string, desc: string) =>
 
 const indexText = (root: string) => {
   try {
-    return readFileSync(join(root, "index.md"), "utf8");
+    return readFileSync(join(root, "index.yaml"), "utf8");
   } catch {
     return "";
   }

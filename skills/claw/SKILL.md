@@ -2,7 +2,7 @@
 name: claw
 description: >-
   Use when reading or indexing markdown knowledge in a workspace — listing what
-  docs exist, navigating a long doc by section, regenerating an index.md — or
+  docs exist, navigating a long doc by section, regenerating an index.yaml — or
   when authoring any new doc (skill, proposal, issue, review, reference) so it
   follows the Open Knowledge Format (OKF).
 ---
@@ -27,7 +27,7 @@ claw --schema=.read     # one command's flags
 claw read docs/proposal.md            # frontmatter ($claw channel) + full body (or a summary if long)
 claw read docs/proposal.md --toc      # heading outline with line counts
 claw read docs/proposal.md --section 2    # one section + its subtree ("2", "1.3", or a range "2-4")
-claw read docs                        # a directory → its index.md (synthesized if absent)
+claw read docs                        # a directory → its index.yaml (synthesized if absent)
 ```
 
 The leading `$claw:` YAML block is the tool→agent channel: the doc's own
@@ -39,7 +39,7 @@ re-reading the whole file.
 ### index — (re)generate the index
 
 ```bash
-claw index                            # write index.md for the current directory tree
+claw index                            # write index.yaml for the current directory tree
 claw index --dir docs                 # index a specific directory
 claw index --inject AGENTS.md         # also inject a pointer block into an always-loaded file
 claw index --dry-run                  # report what would change, write nothing
@@ -53,11 +53,11 @@ pointers (path + description + `when`), so an always-loaded file gains ambient
 awareness of the wiki without inlining doc bodies. The block stays
 pointer-only and collapses to a single line once it grows past a soft cap.
 
-Only **frontmatter-bearing** docs are indexed. A plain `README.md` or
-`AGENTS.md` is not an OKF concept and is skipped. `index.md` and `log.md` are
-reserved filenames. The skill install roots `.agents/skills/` and
-`.claude/skills/` are the skill mechanism's territory — claw indexes nothing
-under them.
+claw writes the index to `index.yaml` (a generated data file — gitignore it).
+Only **frontmatter-bearing** docs are indexed: a plain `README.md` or `AGENTS.md`
+is not an OKF concept and is skipped, as are the reserved `index.md` / `log.md`.
+The skill install roots `.agents/skills/` and `.claude/skills/` are the skill
+mechanism's territory — claw indexes nothing under them.
 
 ### daemon — keep the index fresh automatically
 

@@ -14,12 +14,12 @@ export type ReindexOptions = {
 };
 
 // The single write path shared by `claw index` and the daemon: scan frontmatter
-// docs, regenerate the root index.md, and optionally refresh a pointer block.
+// docs, regenerate the root index.yaml, and optionally refresh a pointer block.
 export function reindex(root: string, options: ReindexOptions = {}): ReindexResult {
   const docs = scanDocs(root);
   const wrote: string[] = [];
 
-  const indexPath = join(root, "index.md");
+  const indexPath = join(root, "index.yaml");
   if (!options.dryRun) writeFileSync(indexPath, buildIndex(docs));
   wrote.push(show(indexPath));
 

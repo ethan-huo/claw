@@ -11,7 +11,7 @@ timestamp: 2026-06-16T00:00:00Z
 # Problem
 
 `claw index` is a one-shot. Someone — the agent or a human — has to run it after
-docs change, and in practice nobody does. We want indexes (`index.md` and the
+docs change, and in practice nobody does. We want indexes (`index.yaml` and the
 `AGENTS.md` pointer block) to stay fresh on their own.
 
 The mechanism is a per-repo **index daemon** that watches for changes and

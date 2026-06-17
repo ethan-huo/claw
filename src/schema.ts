@@ -18,7 +18,7 @@ export const schema = {
   index: c
     .meta({
       description:
-        "Scan a directory of markdown docs and (re)generate an OKF index.md from their frontmatter.",
+        "Scan a directory of markdown docs and (re)generate an index.yaml from their frontmatter.",
       examples: ["claw index", "claw index --inject AGENTS.md", "claw index --dir docs"],
     })
     .input(

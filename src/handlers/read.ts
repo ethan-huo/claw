@@ -72,7 +72,7 @@ export const readHandlers: Pick<AppHandlers, "read"> = {
 };
 
 function readDirectory(dir: string): void {
-  const indexPath = join(dir, "index.md");
+  const indexPath = join(dir, "index.yaml");
   if (existsSync(indexPath)) {
     write(readFileSync(indexPath, "utf8").trimEnd());
     return;
@@ -80,7 +80,7 @@ function readDirectory(dir: string): void {
 
   const synthesized = clawFrontmatter({
     synthesized: true,
-    note: "No index.md here; generated from frontmatter. Run `claw index` to persist it.",
+    note: "No index.yaml here; generated from frontmatter. Run `claw index` to persist it.",
   });
   write(synthesized + buildIndex(scanDocs(dir)).trimEnd());
 }

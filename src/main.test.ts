@@ -51,13 +51,13 @@ test("--schema exposes both commands", async () => {
   expect(stdout).toContain("read(");
 });
 
-test("index writes index.md and injects a pointer block", async () => {
+test("index writes index.yaml and injects a pointer block", async () => {
   const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
   const { stdout, exitCode, stderr } = await claw(root, "index", "--inject", "AGENTS.md");
   expect(exitCode, stderr).toBe(0);
   expect(stdout).toContain("scanned: 1");
 
-  expect(readFileSync(join(root, "index.md"), "utf8")).toContain("file: ./docs/proposal.md");
+  expect(readFileSync(join(root, "index.yaml"), "utf8")).toContain("file: ./docs/proposal.md");
   const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
   expect(agents).toContain("# Project");
   expect(agents).toContain("<!-- claw:index -->");
@@ -68,7 +68,7 @@ test("index --dry-run reports without writing", async () => {
   const root = fixture({ "docs/proposal.md": PROPOSAL });
   const { stdout } = await claw(root, "index", "--dry-run");
   expect(stdout).toContain("dry_run: true");
-  expect(() => readFileSync(join(root, "index.md"), "utf8")).toThrow();
+  expect(() => readFileSync(join(root, "index.yaml"), "utf8")).toThrow();
 });
 
 test("read surfaces the $claw channel and full body for short docs", async () => {
@@ -90,7 +90,7 @@ test("read --toc and --section navigate by heading", async () => {
   expect(section.stdout.trim()).toBe("# Design\nhow");
 });
 
-test("read on a directory without index.md synthesizes one", async () => {
+test("read on a directory without index.yaml synthesizes one", async () => {
   const root = fixture({ "docs/proposal.md": PROPOSAL });
   const { stdout } = await claw(root, "read", "docs");
   expect(stdout).toContain("synthesized: true");

@@ -130,15 +130,10 @@ function deriveTitle(path: string): string {
     .join(" ");
 }
 
-// A real markdown file: an `# index.md` heading, then one entry per concept —
-// `file: ./<path>` plus the doc's frontmatter verbatim — joined by `---`
-// thematic breaks. The blank lines around the rule are required: `text\n---`
-// would parse as a setext heading, not a divider.
+// The index is a YAML list — one entry per concept, `file` plus the doc's
+// frontmatter verbatim. Plain data: readable, ordered, trivially parsed.
 export function buildIndex(docs: DocRecord[]): string {
-  const head = "# index.md\n";
-  if (docs.length === 0) return head;
-  const entries = docs.map((doc) => stringify({ file: `./${doc.path}`, ...doc.data }).trimEnd());
-  return `${head}\n${entries.join("\n\n---\n\n")}\n`;
+  return stringify(docs.map((doc) => ({ file: `./${doc.path}`, ...doc.data })));
 }
 
 function entry(doc: DocRecord): string {
@@ -150,7 +145,7 @@ function entry(doc: DocRecord): string {
 // A compact pointer index for injection into an always-loaded file. Pointers
 // only (path + description + trigger) — never bodies — and it collapses past the
 // cap so the host file cannot grow without bound.
-export function buildPointerBlock(docs: DocRecord[], indexPath = "index.md"): string {
+export function buildPointerBlock(docs: DocRecord[], indexPath = "index.yaml"): string {
   const body =
     docs.length > POINTER_CAP
       ? `> ${docs.length} docs indexed — too many to inline. See [${indexPath}](${indexPath}).`

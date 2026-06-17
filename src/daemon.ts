@@ -138,8 +138,7 @@ function acquireLock(lock: string): boolean {
 
 // React only to markdown that isn't our own output. parcel gives absolute paths.
 function relevant(path: string, root: string): boolean {
-  if (!path.endsWith(".md")) return false;
-  if (basename(path) === "index.md") return false; // generated index
+  if (!path.endsWith(".md")) return false; // index.yaml writes never reach here
   if (path === join(root, "AGENTS.md")) return false; // pointer-block host
   return true;
 }
