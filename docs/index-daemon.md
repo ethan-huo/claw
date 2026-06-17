@@ -176,14 +176,15 @@ hook fires → claw daemon ensure
 
 # Failure modes
 
-| Failure                     | Outcome                                                                                 |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| Daemon crash / `SIGKILL`    | Stale lock; next `ensure` reclaims via `kill(pid,0)`; `getEventsSince` replays the gap. |
-| `SessionEnd` never fires    | Heartbeat goes stale; daemon self-exits within ≤ TTL + tick.                            |
-| Two sessions start at once  | `O_EXCL` lock elects one daemon; the loser just touches the heartbeat.                  |
-| `npm install` churn         | C++ throttle/coalesce absorbs it; one debounced re-index, git filters the noise.        |
-| Imperfect `.gitignore`→glob | At worst a redundant re-index; `git ls-files` keeps output correct.                     |
-| Not a git repo              | No daemon; `ensure` is a no-op; `claw index` still works manually.                      |
+| Failure                     | Outcome                                                                                      |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| Daemon crash / `SIGKILL`    | Stale lock; next `ensure` reclaims via `kill(pid,0)`; `getEventsSince` replays the gap.      |
+| `SessionEnd` never fires    | Heartbeat goes stale; daemon self-exits within ≤ TTL + tick.                                 |
+| Two sessions start at once  | `O_EXCL` lock elects one daemon; the loser just touches the heartbeat.                       |
+| Repo deleted under a daemon | Watch callback and reaper see the vanished `.claw` dir and exit — never spin on a dead path. |
+| `npm install` churn         | C++ throttle/coalesce absorbs it; one debounced re-index, git filters the noise.             |
+| Imperfect `.gitignore`→glob | At worst a redundant re-index; `git ls-files` keeps output correct.                          |
+| Not a git repo              | No daemon; `ensure` is a no-op; `claw index` still works manually.                           |
 
 # Deferred
 

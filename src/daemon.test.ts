@@ -10,7 +10,6 @@ import {
   gitRoot,
   isAlive,
   startDaemon,
-  stopDaemon,
   type DaemonHandle,
 } from "./daemon.ts";
 
@@ -18,11 +17,20 @@ const ENTRY = join(import.meta.dir, "main.ts");
 const roots: string[] = [];
 const handles: DaemonHandle[] = [];
 
+// Bulletproof: SIGKILL any daemon spawned for this root regardless of lock
+// state. A leaked daemon must never survive a test run.
+function killDaemonsForRoot(root: string): void {
+  Bun.spawnSync(["pkill", "-9", "-f", `daemon run --root ${root}`]);
+}
+
 afterEach(async () => {
   for (const handle of handles.splice(0)) await handle.stop().catch(() => {});
   for (const root of roots.splice(0)) {
-    stopDaemon(root); // SIGTERM any spawned daemon
+    killDaemonsForRoot(root);
     rmSync(root, { force: true, recursive: true });
+  }
+  for (const key of ["CLAW_ENTRY", "CLAW_TTL_MS", "CLAW_TICK_MS", "CLAW_DEBOUNCE_MS"]) {
+    delete process.env[key];
   }
 });
 
@@ -118,6 +126,22 @@ test("snapshot catch-up: a change made while stopped is picked up on restart", a
   expect(indexText(root)).toContain("[Offline](docs/offline.md)");
 });
 
+test("a daemon whose root is deleted shuts down instead of spinning", async () => {
+  const root = tmpRepo({ "docs/a.md": DOC("A", "a") });
+  const handle = await startDaemon(root);
+  handles.push(handle!);
+
+  rmSync(root, { force: true, recursive: true }); // pull the repo out from under it
+
+  // The watch callback (or reaper) sees the vanished .claw dir and stops —
+  // it must not keep watching a dead path. Regression guard for the 98% spin.
+  const stopped = await Promise.race([
+    handle!.stopped.then(() => true),
+    Bun.sleep(8000).then(() => false),
+  ]);
+  expect(stopped).toBe(true);
+});
+
 test("ensureDaemon spawns a daemon, is idempotent, and self-reaps on stale heartbeat", async () => {
   process.env.CLAW_ENTRY = ENTRY;
   process.env.CLAW_TTL_MS = "1500";
@@ -135,11 +159,8 @@ test("ensureDaemon spawns a daemon, is idempotent, and self-reaps on stale heart
   expect(ensureDaemon(root)).toBe("running");
   expect(daemonPid(root)).toBe(pid);
 
-  // Stop touching the heartbeat; the daemon self-reaps within the TTL.
+  // Stop touching the heartbeat; the daemon self-reaps within the TTL AND the
+  // process actually exits (not just drops its lock).
   expect(await waitFor(() => daemonPid(root) === undefined, 6000)).toBe(true);
-
-  delete process.env.CLAW_ENTRY;
-  delete process.env.CLAW_TTL_MS;
-  delete process.env.CLAW_TICK_MS;
-  delete process.env.CLAW_DEBOUNCE_MS;
+  expect(await waitFor(() => !isAlive(pid!), 4000)).toBe(true);
 }, 20000);

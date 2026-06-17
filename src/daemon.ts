@@ -187,7 +187,10 @@ export async function startDaemon(root: string): Promise<DaemonHandle | undefine
     subscription = await watcher.subscribe(
       root,
       (error, events) => {
-        if (error) return;
+        if (error || !existsSync(paths.dir)) {
+          void shutdown(false); // watcher failed or our repo vanished — stop now
+          return;
+        }
         if (!events.some((event) => relevant(event.path, root, appendTarget))) return;
         clearTimeout(debounce);
         debounce = setTimeout(() => {
@@ -209,7 +212,9 @@ export async function startDaemon(root: string): Promise<DaemonHandle | undefine
   }
 
   reaper = setInterval(() => {
-    if (!ownsLock()) {
+    if (!existsSync(paths.dir)) {
+      void shutdown(false); // repo/state directory is gone — exit, nothing to clean
+    } else if (!ownsLock()) {
       void shutdown(false); // another daemon won the lock — yield to it
     } else if (heartbeatAge(root) > TTL_MS) {
       void shutdown(true); // idle past the TTL — reap
