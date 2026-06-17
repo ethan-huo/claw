@@ -17,7 +17,6 @@
     "build": "bun build src/main.ts --outfile=dist/claw --target=bun --minify && chmod +x dist/claw"
   },
   "dependencies": {
-    "@parcel/watcher": "^2.5.6",
     "@valibot/to-json-schema": "^1.7.0",
     "argc": "github:ethan-huo/argc#v6.0.0",
     "markdown-it": "^14.2.0",

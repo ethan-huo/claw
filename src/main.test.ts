@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -43,41 +43,59 @@ const PROPOSAL = [
   "how",
 ].join("\n");
 
-test("--schema exposes both commands", async () => {
+test("--schema exposes the four commands", async () => {
   const root = fixture({});
   const { stdout, exitCode, stderr } = await claw(root, "--schema");
   expect(exitCode, stderr).toBe(0);
   expect(stdout).toContain("index(");
   expect(stdout).toContain("read(");
+  expect(stdout).toContain("install(");
+  expect(stdout).toContain("uninstall(");
 });
 
-test("index writes index.yaml and injects a reference block by default", async () => {
+test("index prints the YAML index to stdout — no on-disk artifact", async () => {
+  const root = fixture({ "docs/proposal.md": PROPOSAL });
+  const { stdout, exitCode, stderr } = await claw(root, "index");
+  expect(exitCode, stderr).toBe(0);
+  expect(stdout).toContain("- file: ./docs/proposal.md");
+  expect(stdout).toContain("type: Proposal");
+  // claw never writes index.yaml; the canonical channel is stdout.
+  expect(existsSync(join(root, "index.yaml"))).toBe(false);
+});
+
+test("index --inject embeds the index inline in the host file", async () => {
   const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
   const { stdout, exitCode, stderr } = await claw(root, "index", "--inject", "AGENTS.md");
   expect(exitCode, stderr).toBe(0);
   expect(stdout).toContain("scanned: 1");
+  expect(stdout).toContain("changed: true");
 
-  expect(readFileSync(join(root, "index.yaml"), "utf8")).toContain("file: ./docs/proposal.md");
   const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
   expect(agents).toContain("# Project"); // existing content preserved
   expect(agents).toContain("<!-- claw:index -->");
-  expect(agents).toContain("./index.yaml"); // reference, not inline content
-  expect(agents).not.toContain("file: ./docs/proposal.md");
-});
-
-test("index --inline embeds the index content in the injected block", async () => {
-  const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
-  await claw(root, "index", "--inject", "AGENTS.md", "--inline");
-  const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
   expect(agents).toContain("```yaml");
-  expect(agents).toContain("file: ./docs/proposal.md");
+  expect(agents).toContain("file: ./docs/proposal.md"); // inline content, not a reference
 });
 
-test("index --dry-run reports without writing", async () => {
-  const root = fixture({ "docs/proposal.md": PROPOSAL });
-  const { stdout } = await claw(root, "index", "--dry-run");
-  expect(stdout).toContain("dry_run: true");
-  expect(() => readFileSync(join(root, "index.yaml"), "utf8")).toThrow();
+test("index --inject is idempotent: re-running with no changes reports changed: false", async () => {
+  const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
+  await claw(root, "index", "--inject", "AGENTS.md");
+  const { stdout } = await claw(root, "index", "--inject", "AGENTS.md");
+  expect(stdout).toContain("changed: false");
+});
+
+test("index --inject --quiet writes silently (for hook use)", async () => {
+  const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
+  const { stdout, stderr, exitCode } = await claw(
+    root,
+    "index",
+    "--inject",
+    "AGENTS.md",
+    "--quiet",
+  );
+  expect(exitCode, stderr).toBe(0);
+  expect(stdout).toBe("");
+  expect(readFileSync(join(root, "AGENTS.md"), "utf8")).toContain("file: ./docs/proposal.md");
 });
 
 test("read surfaces the $claw channel and full body for short docs", async () => {
@@ -99,11 +117,11 @@ test("read --toc and --section navigate by heading", async () => {
   expect(section.stdout.trim()).toBe("# Design\nhow");
 });
 
-test("read on a directory without index.yaml synthesizes one", async () => {
+test("read on a directory prints the same index `claw index` would", async () => {
   const root = fixture({ "docs/proposal.md": PROPOSAL });
-  const { stdout } = await claw(root, "read", "docs");
-  expect(stdout).toContain("synthesized: true");
-  expect(stdout).toContain("file: ./proposal.md");
+  const direct = await claw(root, "read", "docs");
+  expect(direct.stdout).toContain("file: ./proposal.md");
+  expect(direct.stdout).not.toContain("$claw"); // no synthesized header — this IS the index
 });
 
 test("read on a missing path exits 3 with a structured error", async () => {

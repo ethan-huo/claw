@@ -2,13 +2,13 @@
 name: claw
 description: >-
   Use when reading or indexing markdown knowledge in a workspace — listing what
-  docs exist, navigating a long doc by section, regenerating an index.yaml — or
-  when authoring any new doc (skill, proposal, issue, review, reference) so it
-  follows the Open Knowledge Format (OKF).
+  docs exist, navigating a long doc by section, embedding a fresh index into
+  AGENTS.md — or when authoring any new doc (skill, proposal, issue, review,
+  reference) so it follows the Open Knowledge Format (OKF).
 ---
 
 `claw` treats a workspace's markdown as an OKF knowledge bundle: a directory of
-docs, each with YAML frontmatter, discoverable through generated indexes and
+docs, each with YAML frontmatter, discoverable through a generated index and
 read with section-level precision. It does two things — **index** and **read** —
 and it sets the convention for how every doc you write should look.
 
@@ -17,7 +17,7 @@ and it sets the convention for how every doc you write should look.
 `claw` is a CLI. Discover the surface before guessing flags:
 
 ```bash
-claw --schema           # both commands, typed
+claw --schema           # all commands, typed
 claw --schema=.read     # one command's flags
 ```
 
@@ -27,7 +27,7 @@ claw --schema=.read     # one command's flags
 claw read docs/proposal.md            # frontmatter ($claw channel) + full body (or a summary if long)
 claw read docs/proposal.md --toc      # heading outline with line counts
 claw read docs/proposal.md --section 2    # one section + its subtree ("2", "1.3", or a range "2-4")
-claw read docs                        # a directory → its index.yaml (synthesized if absent)
+claw read docs                        # a directory → its index (computed live from frontmatter)
 ```
 
 The leading `$claw:` YAML block is the tool→agent channel: the doc's own
@@ -36,48 +36,39 @@ and — for long docs — how to read further. It is not part of the document bo
 Long docs return a `[claw:summary]`; follow the `--section` hint instead of
 re-reading the whole file.
 
-### index — (re)generate the index
+### index — print or embed the index
 
 ```bash
-claw index                            # write index.yaml for the current directory tree
+claw index                            # print the index for the current directory tree to stdout
 claw index --dir docs                 # index a specific directory
-claw index --inject AGENTS.md         # add a reference block pointing at index.yaml
-claw index --inject AGENTS.md --inline  # embed the full index instead of a reference
-claw index --dry-run                  # report what would change, write nothing
+claw index --inject AGENTS.md         # embed the index inline in AGENTS.md
 ```
 
-(To rebuild automatically on every change, use the daemon below instead of
-re-running `claw index`.)
+Two delivery modes, one underlying scan:
 
-`--inject` maintains a `<!-- claw:index -->…<!-- /claw:index -->` block in an
-always-loaded file (e.g. `AGENTS.md`). Two modes:
+- **stdout (default)** — call `claw index` whenever you need a fresh
+  workspace map. No magic, no on-disk artifact.
+- **`--inject`** — embed the full index inside a `<!-- claw:index -->` block
+  in a host file (typically `AGENTS.md`). Why embed and not just point at a
+  file? Because the agent's runtime surfaces edits to AGENTS.md through its
+  file-change channel — so an inline index gives **passive awareness** as
+  docs change, with no extra read. Idempotent: a no-op rebuild does not
+  rewrite the file.
 
-- **reference (default)** — a static one-line prompt telling the agent that
-  `./index.yaml` is the workspace doc index. It never changes as docs change, so
-  it adds no churn to the host file.
-- **`--inline`** — embeds the full `index.yaml` content (fenced YAML) for ambient,
-  no-extra-read visibility. Grows with the corpus and changes as docs change.
-
-claw writes the index to `index.yaml` (a generated data file — gitignore it).
-Only **frontmatter-bearing** docs are indexed: a plain `README.md` or `AGENTS.md`
-is not an OKF concept and is skipped, as are the reserved `index.md` / `log.md`.
-The skill install roots `.agents/skills/` and `.claude/skills/` are the skill
-mechanism's territory — claw indexes nothing under them.
-
-### daemon — keep the index fresh automatically
-
-In a git repo, a background daemon can re-index on every change so you never run
-`claw index` by hand. Enable it once, then it runs itself:
+To keep the embedded index fresh automatically, run `claw install` once —
+it wires `claw index --inject AGENTS.md --quiet` into the agent's lifecycle
+hooks (`SessionStart`, `UserPromptSubmit`, `PostToolUse:Write|Edit|MultiEdit`).
+Each call is a cheap synchronous scan; no background process, no state.
 
 ```bash
-claw daemon install   # one-time: wire auto-indexing into this repo's agent hooks
-claw daemon status    # pid, heartbeat age, watched doc count
-claw daemon stop      # stop it for this repo
+claw install            # one-time: auto-refresh AGENTS.md on doc changes
+claw uninstall          # remove the hooks
 ```
 
-`claw daemon install` is the setup step — it configures the agent integration for
-you (idempotent; safe to re-run). After that the daemon starts and stays fresh on
-its own. Design: [index daemon](/docs/index-daemon.md).
+Only **frontmatter-bearing** docs are indexed: a plain `README.md` or
+`AGENTS.md` is not an OKF concept and is skipped, as are the reserved
+`index.md` / `log.md`. Dot-prefixed directories (`.git`, `.claw`, `.scratch`,
+`.agents`, `.claude`, …) are Unix-hidden infrastructure and never indexed.
 
 ## Author every doc in OKF format
 
@@ -154,10 +145,12 @@ timestamp: 2026-06-16T00:00:00Z
 type: Reference
 title: OKF spec
 description: Open Knowledge Format conventions.
-resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
+resource: https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/
 ```
 
-After authoring or moving docs, run `claw index` so the indexes stay in sync.
+After authoring or moving docs, the embedded index in AGENTS.md follows
+automatically if `claw install` is wired up; otherwise run `claw index --inject
+AGENTS.md` once.
 
 ## Feedback
 

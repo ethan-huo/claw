@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { stringify } from "yaml";
 
 import type { Frontmatter } from "../frontmatter.ts";
@@ -40,7 +40,9 @@ export const readHandlers: Pick<AppHandlers, "read"> = {
     }
 
     if (stat.isDirectory()) {
-      readDirectory(target);
+      // Directory read = the same index `claw index` would print. The index
+      // is computed on demand; there is no on-disk artifact to cache.
+      write(buildIndex(scanDocs(target)).trimEnd());
       return;
     }
 
@@ -70,20 +72,6 @@ export const readHandlers: Pick<AppHandlers, "read"> = {
     write(clawFrontmatter(channel) + content);
   }),
 };
-
-function readDirectory(dir: string): void {
-  const indexPath = join(dir, "index.yaml");
-  if (existsSync(indexPath)) {
-    write(readFileSync(indexPath, "utf8").trimEnd());
-    return;
-  }
-
-  const synthesized = clawFrontmatter({
-    synthesized: true,
-    note: "No index.yaml here; generated from frontmatter. Run `claw index` to persist it.",
-  });
-  write(synthesized + buildIndex(scanDocs(dir)).trimEnd());
-}
 
 function pickMeta(data: Frontmatter): Record<string, unknown> {
   const meta: Record<string, unknown> = {};

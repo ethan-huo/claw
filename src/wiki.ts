@@ -6,28 +6,17 @@ import { stringify } from "yaml";
 import { usageError } from "./errors.ts";
 import { parseFrontmatter, type Frontmatter } from "./frontmatter.ts";
 
+// The index entry an agent navigates by: a path plus the doc's frontmatter,
+// dumped verbatim. We deliberately don't normalize/derive fields — agents read
+// the YAML; fabricated metadata would mislead them.
 export type DocRecord = {
   path: string; // posix, relative to the scan root
-  type: string;
-  title: string;
-  description?: string;
-  when?: string;
-  timestamp?: string;
-  tags?: string[];
-  data?: Frontmatter; // the doc's raw frontmatter, dumped verbatim into the index
+  data: Frontmatter;
 };
 
-// Build/VCS noise we never want in a knowledge index.
-const IGNORED_SEGMENTS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  "coverage",
-  ".scratch",
-  ".next",
-  ".claw", // daemon state, never a concept
-]);
+// Non-dot build noise we never want indexed. Dot-prefixed dirs are filtered by
+// the Unix-hidden rule in `listMarkdown` and don't need to be listed here.
+const IGNORED_DIRS = new Set(["node_modules", "dist", "build", "coverage"]);
 
 // OKF reserves these filenames; they are structure, not concepts.
 const RESERVED = new Set(["index.md", "log.md"]);
@@ -35,15 +24,10 @@ const RESERVED = new Set(["index.md", "log.md"]);
 export const BLOCK_START = "<!-- claw:index -->";
 export const BLOCK_END = "<!-- /claw:index -->";
 
-// Where installed/active skills live — the skill mechanism's territory. These
-// are the only two; claw indexes nothing under them.
-const SKILL_ROOTS = [".agents/skills/", ".claude/skills/"];
-
 export function scanDocs(root: string): DocRecord[] {
   const records: DocRecord[] = [];
 
   for (const rel of listMarkdown(root)) {
-    if (SKILL_ROOTS.some((dir) => rel.startsWith(dir))) continue;
     const base = rel.split("/").pop() ?? "";
     if (RESERVED.has(base)) continue;
 
@@ -60,7 +44,7 @@ export function scanDocs(root: string): DocRecord[] {
     const parsed = parseFrontmatter(text);
     if (!parsed.hasFrontmatter) continue;
 
-    records.push(toRecord(rel, parsed.data));
+    records.push({ path: rel, data: parsed.data });
   }
 
   records.sort((a, b) => a.path.localeCompare(b.path));
@@ -70,7 +54,9 @@ export function scanDocs(root: string): DocRecord[] {
 // Enumerate candidate markdown as posix paths relative to root. In a git repo
 // this is the authoritative `.gitignore`-respecting set (tracked + untracked,
 // minus ignored); the daemon's coarse watch ignore never has to be exact. Falls
-// back to a glob with a hardcoded ignore list outside a repo.
+// back to a glob with a hardcoded ignore list outside a repo. Either way we
+// drop dot-prefixed segments — Unix-hidden dirs are infrastructure (.git,
+// .claw, .agents, .claude, .next, .scratch …), never knowledge to surface.
 function listMarkdown(root: string): string[] {
   const git = Bun.spawnSync(
     [
@@ -87,43 +73,15 @@ function listMarkdown(root: string): string[] {
     ],
     { stderr: "ignore" },
   );
-  if (git.exitCode === 0) {
-    return [...new Set(git.stdout.toString().split("\0").filter(Boolean))];
-  }
 
-  const glob = new Glob("**/*.md");
-  return [...glob.scanSync({ cwd: root, dot: true, onlyFiles: true })]
-    .filter((rel) => !rel.split(sep).some((segment) => IGNORED_SEGMENTS.has(segment)))
-    .map((rel) => rel.split(sep).join("/"));
-}
+  const candidates =
+    git.exitCode === 0
+      ? [...new Set(git.stdout.toString().split("\0").filter(Boolean))]
+      : [...new Glob("**/*.md").scanSync({ cwd: root, dot: true, onlyFiles: true })]
+          .filter((rel) => !rel.split(sep).some((segment) => IGNORED_DIRS.has(segment)))
+          .map((rel) => rel.split(sep).join("/"));
 
-function toRecord(path: string, data: Frontmatter): DocRecord {
-  return {
-    path,
-    type: asString(data.type) ?? "Untyped",
-    title: asString(data.title) ?? deriveTitle(path),
-    description: asString(data.description),
-    when: asString(data.when),
-    timestamp: asString(data.timestamp),
-    tags: Array.isArray(data.tags) ? data.tags.map((tag) => String(tag)) : undefined,
-    data,
-  };
-}
-
-function asString(value: unknown): string | undefined {
-  if (typeof value === "string") return value.trim() || undefined;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (value instanceof Date) return value.toISOString();
-  return undefined;
-}
-
-function deriveTitle(path: string): string {
-  const base = (path.split("/").pop() ?? path).replace(/\.md$/, "");
-  return base
-    .split(/[-_]+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  return candidates.filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".")));
 }
 
 // The index is a YAML list — one entry per concept, `file` plus the doc's
@@ -132,25 +90,14 @@ export function buildIndex(docs: DocRecord[]): string {
   return stringify(docs.map((doc) => ({ file: `./${doc.path}`, ...doc.data })));
 }
 
-// The default injection: a static prompt pointing the agent at index.yaml. It
-// never changes as docs change — no churn in an always-loaded file.
-export function referenceBlock(indexPath = "index.yaml"): string {
+// The injected block: the full index, fenced so a markdown formatter leaves
+// the embedded YAML alone. Embedding gives the agent passive awareness through
+// the host's file-change channel — a static reference would force the agent to
+// read a second file, no better than just calling `claw index` on demand.
+export function indexBlock(docs: DocRecord[]): string {
   return [
     BLOCK_START,
-    "<!-- Generated by `claw index`. -->",
-    `The documents in this workspace are indexed in \`./${indexPath}\` — one entry`,
-    "per doc, with its path and frontmatter (type, description, `when`, …). Read",
-    "it to discover what docs exist and when to consult them.",
-    BLOCK_END,
-  ].join("\n");
-}
-
-// The opt-in injection: the full index.yaml content, fenced so a markdown
-// formatter leaves the embedded YAML alone. Ambient but grows with the corpus.
-export function inlineBlock(docs: DocRecord[]): string {
-  return [
-    BLOCK_START,
-    "<!-- Generated by `claw index`. Edit the docs, not this block. -->",
+    "<!-- Generated by `claw index --inject`. Edit the docs, not this block. -->",
     "```yaml",
     buildIndex(docs).trimEnd(),
     "```",

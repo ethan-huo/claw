@@ -3,12 +3,16 @@ import { dirname, join } from "node:path";
 
 import { usageError } from "./errors.ts";
 
-// Wiring `claw daemon ensure` into agent lifecycle hooks is a setup step, not
+// Wiring `claw index --inject` into agent lifecycle hooks is a setup step, not
 // something the agent or the skill should reason about. This module owns the
-// shape of that config so callers just run `claw daemon install`.
+// shape of that config so callers just run `claw install`.
 
-const HOOK_COMMAND = "claw daemon ensure";
+const HOOK_COMMAND = "claw index --inject AGENTS.md --quiet";
 
+// SessionStart catches changes between sessions (external editor, `git pull`,
+// another agent). UserPromptSubmit catches changes the user made between this
+// agent's turns. PostToolUse catches the agent's own Write/Edit. Each is a
+// cheap, idempotent `claw index --inject` — no-op writes are short-circuited.
 const WIRING: ReadonlyArray<{ event: string; matcher?: string }> = [
   { event: "SessionStart" },
   { event: "UserPromptSubmit" },

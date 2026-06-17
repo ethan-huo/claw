@@ -3,8 +3,8 @@
 import { cli } from "argc";
 
 import packageJson from "../package.json" with { type: "json" };
-import { daemonHandlers } from "./handlers/daemon.ts";
 import { indexHandlers } from "./handlers/index-cmd.ts";
+import { installHandlers } from "./handlers/install.ts";
 import { readHandlers } from "./handlers/read.ts";
 import { createContext } from "./runtime.ts";
 import { globalsSchema, schema } from "./schema.ts";
@@ -21,6 +21,6 @@ await app.run({
   handlers: {
     ...indexHandlers,
     ...readHandlers,
-    ...daemonHandlers,
+    ...installHandlers,
   },
 });

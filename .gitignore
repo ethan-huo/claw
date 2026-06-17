@@ -1,4 +1,11 @@
 node_modules/
 dist/
-.claw/
+
+# transient artifacts from running the tool against itself or smoke tests
 index.yaml
+.claw/
+.scratch/
+
+# editor / OS noise
+.DS_Store
+*.log

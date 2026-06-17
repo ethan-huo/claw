@@ -2,20 +2,25 @@
 
 OKF-native knowledge index and reader for agent workspaces.
 
-`claw` treats a workspace's markdown as an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+`claw` treats a workspace's markdown as an [Open Knowledge Format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/)
 bundle — a directory of docs with YAML frontmatter — and gives an agent two
 verbs over it:
 
-- **`claw index`** — scan a tree of frontmatter docs and (re)generate an OKF
-  `index.yaml`; optionally `--inject` a block into an always-loaded file like
-  `AGENTS.md` (a static reference to `index.yaml` by default, or the full index
-  with `--inline`). For continuous freshness, use `claw daemon` below.
+- **`claw index`** — scan a tree of frontmatter-bearing docs and emit an index
+  to stdout. With `--inject AGENTS.md`, embed the index inline into a host
+  file so the agent's runtime (Claude Code, Codex) surfaces doc changes
+  through its file-change channel. No on-disk index file; no daemon.
 - **`claw read`** — read a doc or a directory's index with agent-optimized
   navigation: a `$claw` frontmatter channel, `--toc`, `--section`, and a
   structural summary for long docs.
-- **`claw daemon`** — a per-repo background watcher (anchored to the git root,
-  kept alive by a heartbeat) that re-indexes on change. Wire `claw daemon ensure`
-  to agent lifecycle hooks. See [docs/index-daemon.md](docs/index-daemon.md).
+
+Two helper commands wire `claw index --inject` into agent lifecycle hooks so
+the embedded index follows doc changes automatically:
+
+- **`claw install`** / **`claw uninstall`** — manage the hooks in
+  `.claude/settings.local.json` (or `--project` for the shared
+  `settings.json`). The hook command is a synchronous `claw index --inject
+AGENTS.md --quiet` — idempotent, stateless, fast.
 
 It also ships a skill (`skills/claw/SKILL.md`) that teaches agents to author
 _every_ new doc in OKF format — the right frontmatter for skills (`when`),
@@ -23,7 +28,9 @@ proposals (`version`/`status`), issues, reviews, and references.
 
 ```bash
 claw --schema                       # discover the surface
-claw index --inject AGENTS.md       # build index.yaml + inject a pointer block
+claw index                          # print the index to stdout
+claw index --inject AGENTS.md       # embed the index inline in AGENTS.md
+claw install                        # auto-refresh AGENTS.md on doc changes
 claw read docs/proposal.md --toc    # outline a doc
 claw read docs/proposal.md --section 2
 ```

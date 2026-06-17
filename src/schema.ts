@@ -1,7 +1,7 @@
 import type { InferHandlers } from "argc";
 
 import { toStandardJsonSchema } from "@valibot/to-json-schema";
-import { c, group } from "argc";
+import { c } from "argc";
 import * as v from "valibot";
 
 import type { AppContext } from "./runtime.ts";
@@ -18,20 +18,19 @@ export const schema = {
   index: c
     .meta({
       description:
-        "Scan a directory of markdown docs and (re)generate an index.yaml from their frontmatter.",
+        "Scan a directory of frontmatter-bearing markdown docs and emit an OKF index. Prints to stdout by default; --inject embeds it into a host file (e.g. AGENTS.md).",
       examples: [
         "claw index",
         "claw index --inject AGENTS.md",
-        "claw index --inject AGENTS.md --inline",
+        "claw index --dir docs --inject AGENTS.md",
       ],
     })
     .input(
       s(
         v.object({
           dir: v.optional(v.string()), // directory to scan; defaults to cwd
-          inject: v.optional(v.string()), // inject/refresh an index block in this file
-          inline: v.optional(v.boolean()), // embed the full index instead of a reference to index.yaml
-          dryRun: v.optional(v.boolean()), // report changes without writing
+          inject: v.optional(v.string()), // host file to embed the index block in
+          quiet: v.optional(v.boolean()), // suppress the summary line on --inject (for hook use)
         }),
       ),
     ),
@@ -54,38 +53,19 @@ export const schema = {
         }),
       ),
     ),
-  daemon: group(
-    { description: "Manage the per-repo index daemon that keeps indexes fresh on change." },
-    {
-      install: c
-        .meta({
-          description:
-            "Wire `claw daemon ensure` into this repo's agent hooks (default .claude/settings.local.json; --project for the shared settings.json). Creates or merges the file. Run once to enable auto-indexing.",
-          examples: ["claw daemon install", "claw daemon install --project"],
-        })
-        .input(s(v.object({ project: v.optional(v.boolean()) }))),
-      uninstall: c
-        .meta({
-          description:
-            "Remove claw's hooks from this repo's agent settings (--project for the shared file).",
-        })
-        .input(s(v.object({ project: v.optional(v.boolean()) }))),
-      ensure: c
-        .meta({
-          description:
-            "Ensure the index daemon is running for this repo and refresh its heartbeat. The hook entry point; a no-op outside a git repo.",
-          examples: ["claw daemon ensure"],
-        })
-        .input(s(v.object({}))),
-      status: c
-        .meta({ description: "Report the index daemon's status for this repo." })
-        .input(s(v.object({}))),
-      stop: c.meta({ description: "Stop the index daemon for this repo." }).input(s(v.object({}))),
-      run: c
-        .meta({ description: "Internal: run the daemon in the foreground (spawned by ensure)." })
-        .input(s(v.object({ root: v.optional(v.string()) }))),
-    },
-  ),
+  install: c
+    .meta({
+      description:
+        "Wire `claw index --inject AGENTS.md` into this repo's agent hooks so the embedded index follows doc changes. Defaults to .claude/settings.local.json; --project for the shared settings.json.",
+      examples: ["claw install", "claw install --project"],
+    })
+    .input(s(v.object({ project: v.optional(v.boolean()) }))),
+  uninstall: c
+    .meta({
+      description:
+        "Remove claw's hooks from this repo's agent settings (--project for the shared file).",
+    })
+    .input(s(v.object({ project: v.optional(v.boolean()) }))),
 };
 
 export type AppHandlers = InferHandlers<typeof schema, AppContext>;

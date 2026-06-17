@@ -34,7 +34,7 @@ test("install defaults to settings.local.json and wires the three events", () =>
   expect(result.added).toEqual(["SessionStart", "UserPromptSubmit", "PostToolUse"]);
 
   const hooks = localSettings(root).hooks;
-  expect(hooks.SessionStart[0].hooks[0].command).toBe("claw daemon ensure");
+  expect(hooks.SessionStart[0].hooks[0].command).toBe("claw index --inject AGENTS.md --quiet");
   expect(hooks.PostToolUse[0].matcher).toBe("Write|Edit|MultiEdit");
   // the shared (committed) file is left untouched
   expect(existsSync(join(root, ".claude", "settings.json"))).toBe(false);

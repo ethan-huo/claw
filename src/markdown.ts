@@ -136,6 +136,9 @@ function selectRanges(
   return ranges;
 }
 
+// Lines of head-preview to show when a long doc has no headings to anchor on.
+const HEADLESS_PREVIEW_LINES = 30;
+
 // A compressed view of a long document: every heading kept, each section
 // previewed by a few non-empty lines proportional to its size. Forces the agent
 // to --section into what it needs instead of slurping the whole file.
@@ -144,7 +147,7 @@ export function structuralSummary(body: string, readHint: string): string {
   const headings = parseHeadings(body);
 
   if (headings.length === 0) {
-    const preview = lines.slice(0, 30).join("\n").trimEnd();
+    const preview = lines.slice(0, HEADLESS_PREVIEW_LINES).join("\n").trimEnd();
     return `[claw:summary] ${lines.length} lines, no sections.\n\n${preview}`;
   }
 
