@@ -46,6 +46,13 @@ Only **frontmatter-bearing** docs are indexed: a plain `README.md` or
 `index.md` / `log.md`. Dot-prefixed directories (`.git`, `.claw`, `.scratch`,
 `.agents`, `.claude`, …) are Unix-hidden infrastructure and never indexed.
 
+**Skill folders are also ceded.** Any directory containing a `SKILL.md` —
+that file plus every sibling and every nested file — drops out of the index.
+A skill is load-on-demand knowledge owned by the agent runtime (Claude Code,
+Codex), not part of the project's OKF bundle. You can still read a skill
+file directly with `claw read path/to/SKILL.md`; it just doesn't appear in
+any directory index.
+
 ### read a file → its content
 
 ```bash

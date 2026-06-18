@@ -18,7 +18,7 @@ One command — `read` — over a file or a directory.
 - Entry/wiring: `src/main.ts`. The command handler: `src/handlers/read.ts`.
   Everything else in `src/` is reusable logic.
 - `wiki.ts` — `scanDocs` (enumerates via `git ls-files`, glob fallback) and
-  `buildIndex` / `indexEntries` (a directory's index as YAML or plain records).
+  `buildIndex` (a YAML list, one entry per concept).
 - `markdown.ts` — markdown-it backed `--toc` / `--section` / summary. Output is
   validated byte-for-byte against the `ctx` tool; keep it aligned.
 
@@ -35,6 +35,12 @@ One command — `read` — over a file or a directory.
 - `scanDocs` indexes only frontmatter-bearing markdown. Dot-prefixed
   directories (`.git`, `.claw`, `.scratch`, `.agents`, `.claude`, …) are
   Unix-hidden infrastructure and are never indexed.
+- **A `SKILL.md` cedes its directory.** Any folder that holds a `SKILL.md`
+  (and every nested file beneath it) drops out of the index — skills are
+  load-on-demand knowledge owned by the agent runtime, not concepts in this
+  workspace's OKF bundle. `read` against a SKILL.md path still works; only
+  the directory scan defers. Match is byte-exact (`SKILL.md`); a lowercase
+  `skill.md` is a regular doc.
 - A file read returns markdown (the `$claw` channel + body/summary); a
   directory read returns the index. `read` with no path indexes the cwd.
 - Tests are the contract. Changing behavior without a test usually means it
@@ -42,5 +48,8 @@ One command — `read` — over a file or a directory.
 
 ## Knowledge
 
-Run `claw read` for the live index of this tree. The one knowledge doc today is
-the claw skill: `skills/claw/SKILL.md`.
+This workspace has no project-level OKF concept docs — everything human-facing
+lives in `README.md` / this guide / `skills/claw/SKILL.md`, and the SKILL.md
+cede rule keeps the skill out of the index. So `claw read` against this tree
+is empty by design; that's the dogfood. The knowledge file an agent should
+read on entry is the skill: `skills/claw/SKILL.md`.

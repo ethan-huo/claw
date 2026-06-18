@@ -46,6 +46,40 @@ test("cedes any dot-prefixed directory — Unix-hidden is infrastructure, not kn
   expect(scanDocs(root).map((d) => d.path)).toEqual(["docs/real.md"]);
 });
 
+test("cedes any directory containing a SKILL.md — skills are agent infrastructure", () => {
+  // A workspace-level skill folder belongs to the agent runtime, not the OKF
+  // bundle. Cede the whole subtree: SKILL.md, sibling notes, every nested file.
+  const root = fixture({
+    "docs/real.md": "---\ntype: Note\ntitle: Real\n---\nx",
+    "skills/claw/SKILL.md": "---\nname: claw\ndescription: ...\n---\nbody",
+    "skills/claw/notes.md": "---\ntype: Note\ntitle: Sibling\n---\nx",
+    "skills/claw/refs/spec.md": "---\ntype: Reference\ntitle: Nested\n---\nx",
+  });
+  expect(scanDocs(root).map((d) => d.path)).toEqual(["docs/real.md"]);
+});
+
+test("the SKILL.md cede is bounded by a path-segment boundary, not raw prefix", () => {
+  // `skills/claw` must not shadow `skills/claw-extras`: the cede applies to
+  // the directory holding SKILL.md, not to anything that string-prefix-matches.
+  const root = fixture({
+    "skills/claw/SKILL.md": "---\nname: claw\ndescription: ...\n---\nx",
+    "skills/claw/notes.md": "---\ntype: Note\ntitle: Inside skill\n---\nx",
+    "skills/claw-extras/usage.md": "---\ntype: Note\ntitle: Sibling concept\n---\nx",
+  });
+  expect(scanDocs(root).map((d) => d.path)).toEqual(["skills/claw-extras/usage.md"]);
+});
+
+test("a SKILL.md at the scan root cedes the entire tree, deliberately", () => {
+  // Rare, but unambiguous: if the user points claw at a folder that is itself
+  // a skill, every doc inside is part of that skill — the index is empty.
+  const root = fixture({
+    "SKILL.md": "---\nname: top\ndescription: ...\n---\nx",
+    "notes.md": "---\ntype: Note\ntitle: Inside\n---\nx",
+    "sub/x.md": "---\ntype: Note\ntitle: Deeper\n---\nx",
+  });
+  expect(scanDocs(root)).toEqual([]);
+});
+
 test("scans frontmatter docs, skipping reserved, plain, and ignored files", () => {
   const root = fixture({
     "a.md": "---\ntype: Note\ntitle: A\ndescription: first\n---\nbody",

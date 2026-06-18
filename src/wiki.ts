@@ -25,10 +25,39 @@ const IGNORED_DIRS = new Set(["node_modules", "dist", "build", "coverage"]);
 // OKF reserves these filenames; they are structure, not concepts.
 const RESERVED = new Set(["index.md", "log.md"]);
 
+// A `SKILL.md` marks an agent skill: load-on-demand knowledge that belongs to
+// the agent runtime (Claude Code, Codex), not to the project's OKF bundle.
+// claw cedes the entire skill folder — SKILL.md itself, sibling notes, every
+// nested file — so a workspace that ships its own skills doesn't see them
+// pollute the index. Match is byte-exact: agent runtimes spell it `SKILL.md`,
+// and being strict here means we don't catch a stray lowercase `skill.md` an
+// author meant as a real concept.
+const SKILL_FILENAME = "SKILL.md";
+
 export function scanDocs(root: string): DocRecord[] {
+  const candidates = listMarkdown(root);
+
+  // First pass: every directory that holds a SKILL.md becomes a forbidden
+  // prefix. The trailing `/` is the boundary that keeps `skills/claw` from
+  // shadowing `skills/claw-extras`.
+  const skillRoots: string[] = [];
+  for (const rel of candidates) {
+    const slash = rel.lastIndexOf("/");
+    const base = slash === -1 ? rel : rel.slice(slash + 1);
+    if (base === SKILL_FILENAME) {
+      const dir = slash === -1 ? "" : rel.slice(0, slash);
+      // dir === "" means the scan root itself is a skill — the whole tree is
+      // ceded, deliberately. A SKILL.md at the root is rare; when it shows up,
+      // the user's intent is "this entire workspace is a skill folder".
+      skillRoots.push(dir === "" ? "" : `${dir}/`);
+    }
+  }
+
   const records: DocRecord[] = [];
 
-  for (const rel of listMarkdown(root)) {
+  for (const rel of candidates) {
+    if (skillRoots.some((prefix) => prefix === "" || rel.startsWith(prefix))) continue;
+
     const base = rel.split("/").pop() ?? "";
     if (RESERVED.has(base)) continue;
 
