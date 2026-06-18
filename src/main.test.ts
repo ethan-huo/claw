@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -43,59 +43,14 @@ const PROPOSAL = [
   "how",
 ].join("\n");
 
-test("--schema exposes the four commands", async () => {
+test("--schema exposes the single read command", async () => {
   const root = fixture({});
   const { stdout, exitCode, stderr } = await claw(root, "--schema");
   expect(exitCode, stderr).toBe(0);
-  expect(stdout).toContain("index(");
   expect(stdout).toContain("read(");
-  expect(stdout).toContain("install(");
-  expect(stdout).toContain("uninstall(");
-});
-
-test("index prints the YAML index to stdout — no on-disk artifact", async () => {
-  const root = fixture({ "docs/proposal.md": PROPOSAL });
-  const { stdout, exitCode, stderr } = await claw(root, "index");
-  expect(exitCode, stderr).toBe(0);
-  expect(stdout).toContain("- file: ./docs/proposal.md");
-  expect(stdout).toContain("type: Proposal");
-  // claw never writes index.yaml; the canonical channel is stdout.
-  expect(existsSync(join(root, "index.yaml"))).toBe(false);
-});
-
-test("index --inject embeds the index inline in the host file", async () => {
-  const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
-  const { stdout, exitCode, stderr } = await claw(root, "index", "--inject", "AGENTS.md");
-  expect(exitCode, stderr).toBe(0);
-  expect(stdout).toContain("scanned: 1");
-  expect(stdout).toContain("changed: true");
-
-  const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
-  expect(agents).toContain("# Project"); // existing content preserved
-  expect(agents).toContain("<!-- claw:index -->");
-  expect(agents).toContain("```yaml");
-  expect(agents).toContain("file: ./docs/proposal.md"); // inline content, not a reference
-});
-
-test("index --inject is idempotent: re-running with no changes reports changed: false", async () => {
-  const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
-  await claw(root, "index", "--inject", "AGENTS.md");
-  const { stdout } = await claw(root, "index", "--inject", "AGENTS.md");
-  expect(stdout).toContain("changed: false");
-});
-
-test("index --inject --quiet writes silently (for hook use)", async () => {
-  const root = fixture({ "docs/proposal.md": PROPOSAL, "AGENTS.md": "# Project\n" });
-  const { stdout, stderr, exitCode } = await claw(
-    root,
-    "index",
-    "--inject",
-    "AGENTS.md",
-    "--quiet",
-  );
-  expect(exitCode, stderr).toBe(0);
-  expect(stdout).toBe("");
-  expect(readFileSync(join(root, "AGENTS.md"), "utf8")).toContain("file: ./docs/proposal.md");
+  // The inject/install surface is gone — claw is a pure reader now.
+  expect(stdout).not.toContain("index(");
+  expect(stdout).not.toContain("install(");
 });
 
 test("read surfaces the $claw channel and full body for short docs", async () => {
@@ -117,11 +72,21 @@ test("read --toc and --section navigate by heading", async () => {
   expect(section.stdout.trim()).toBe("# Design\nhow");
 });
 
-test("read on a directory prints the same index `claw index` would", async () => {
+test("read on a directory emits its index, computed live with no on-disk artifact", async () => {
   const root = fixture({ "docs/proposal.md": PROPOSAL });
   const direct = await claw(root, "read", "docs");
   expect(direct.stdout).toContain("file: ./proposal.md");
+  expect(direct.stdout).toContain("type: Proposal");
   expect(direct.stdout).not.toContain("$claw"); // no synthesized header — this IS the index
+  // claw never writes an index file; the index is always computed on read.
+  expect(existsSync(join(root, "index.yaml"))).toBe(false);
+});
+
+test("read with no path indexes the current directory", async () => {
+  const root = fixture({ "proposal.md": PROPOSAL });
+  const { stdout, exitCode, stderr } = await claw(root, "read");
+  expect(exitCode, stderr).toBe(0);
+  expect(stdout).toContain("file: ./proposal.md");
 });
 
 test("read on a missing path exits 3 with a structured error", async () => {

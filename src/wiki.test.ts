@@ -4,15 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
 
-import {
-  BLOCK_END,
-  BLOCK_START,
-  buildIndex,
-  indexBlock,
-  injectManagedBlock,
-  scanDocs,
-  type DocRecord,
-} from "./wiki.ts";
+import { buildIndex, scanDocs, type DocRecord } from "./wiki.ts";
 
 const dirs: string[] = [];
 
@@ -139,46 +131,4 @@ test("an author-written `size` in frontmatter wins over the synthesized hint", (
 
 test("buildIndex emits an empty YAML list for no docs", () => {
   expect(parse(buildIndex([]))).toEqual([]);
-});
-
-test("indexBlock embeds the index in a fenced yaml block", () => {
-  const block = indexBlock([
-    { path: "a.md", size: "1 tokens, 1 lines", data: { type: "Note", description: "d" } },
-  ]);
-  expect(block.startsWith(BLOCK_START)).toBe(true);
-  expect(block.endsWith(BLOCK_END)).toBe(true);
-  expect(block).toContain("```yaml");
-  expect(block).toContain("- file: ./a.md");
-  expect(block).toContain("description: d");
-});
-
-test("indexBlock pads the fence with blank lines — keeps formatters from rewriting it", () => {
-  // CommonMark formatters (oxfmt, prettier) insert blank lines around fenced
-  // code blocks. If claw doesn't emit them, every hook → format → hook cycle
-  // re-dirties the host file. Lock the layout in.
-  const block = indexBlock([{ path: "a.md", size: "1 tokens, 1 lines", data: { type: "Note" } }]);
-  expect(block).toContain("\n\n```yaml");
-  expect(block).toContain("```\n\n<!-- /claw:index -->");
-});
-
-test("injects then replaces a managed block idempotently", () => {
-  const first = indexBlock([{ path: "a.md", size: "1 tokens, 1 lines", data: { type: "Note" } }]);
-  const once = injectManagedBlock("# Project\n", first);
-  expect(once).toContain("# Project");
-  expect(once).toContain(BLOCK_START);
-  expect(once).toContain("file: ./a.md");
-
-  const newer = indexBlock([{ path: "b.md", size: "1 tokens, 1 lines", data: { type: "Note" } }]);
-  const twice = injectManagedBlock(once, newer);
-  expect(twice.split(BLOCK_START).length - 1).toBe(1); // exactly one block
-  expect(twice).toContain("file: ./b.md");
-  expect(twice).not.toContain("file: ./a.md"); // old block replaced
-});
-
-test("injectManagedBlock refuses to write when a marker is unbalanced", () => {
-  // start marker present, end marker missing → corrupted; must not append.
-  const block = indexBlock([{ path: "a.md", size: "1 tokens, 1 lines", data: { type: "Note" } }]);
-  expect(() => injectManagedBlock(`# Project\n${BLOCK_START}\nstray\n`, block)).toThrow(
-    /unbalanced/,
-  );
 });

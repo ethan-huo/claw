@@ -2,32 +2,51 @@
 name: claw
 description: >
   Use whenever you work with markdown knowledge in this workspace — reading or
-  navigating a doc by section, listing or indexing what docs exist, or
-  authoring and editing a doc so it follows the Open Knowledge Format (OKF):
-  YAML frontmatter, a structural body, a generated index. Backs the `claw`
-  CLI (read, index) and the OKF convention every doc here should carry.
+  navigating a doc by section, listing what docs exist via a directory's index,
+  or authoring and editing a doc so it follows the Open Knowledge Format (OKF):
+  YAML frontmatter and a structural body. Backs the `claw read` CLI and the OKF
+  convention every doc here should carry.
 ---
 
 `claw` treats a workspace's markdown as an OKF knowledge bundle: a directory of
-docs, each with YAML frontmatter, discoverable through a generated index and
-read with section-level precision. It does two things — **index** and **read** —
-and it sets the convention for how every doc you write should look.
+docs, each with YAML frontmatter, discoverable through a live index and read
+with section-level precision. It has one command — **read** — over a file or a
+directory, and it sets the convention for how every doc you write should look.
 
 ## Run it
 
 `claw` is a CLI. Discover the surface before guessing flags:
 
 ```bash
-claw --schema           # all commands, typed
+claw --schema           # the command, typed
 ```
 
-### read — navigate a doc or a directory
+### read a directory → its index
+
+```bash
+claw read                             # index the current directory tree
+claw read docs                        # index a specific directory
+```
+
+A directory's natural reading is its **index**: a YAML list, one entry per
+frontmatter-bearing doc, carrying the doc's `file`, a `size` hint, and its
+frontmatter verbatim. It is computed live on every read — there is no on-disk
+index file to go stale. Use the `size` hint (e.g. `"1234 tokens, 56 lines"`, a
+chars/4 estimate, ±15% on prose) to decide before reading: a small doc → read
+the whole body; a large doc → go straight to `--toc` and drill in with
+`--section`.
+
+Only **frontmatter-bearing** docs are indexed: a plain `README.md` or
+`AGENTS.md` is not an OKF concept and is skipped, as are the reserved
+`index.md` / `log.md`. Dot-prefixed directories (`.git`, `.claw`, `.scratch`,
+`.agents`, `.claude`, …) are Unix-hidden infrastructure and never indexed.
+
+### read a file → its content
 
 ```bash
 claw read docs/proposal.md            # frontmatter ($claw channel) + full body (or a summary if long)
 claw read docs/proposal.md --toc      # heading outline with line counts
 claw read docs/proposal.md --section 2    # one section + its subtree ("2", "1.3", or a range "2-4")
-claw read docs                        # a directory → its index (computed live from frontmatter)
 ```
 
 The leading `$claw:` YAML block is the tool→agent channel: the doc's own
@@ -36,50 +55,11 @@ from the body (`.md` hrefs), and — for long docs — how to read further. It i
 not part of the document body. Long docs return a `[claw:summary]`; follow the
 `--section` hint instead of re-reading the whole file.
 
-### index — print or embed the index
-
-```bash
-claw index                            # print the index for the current directory tree to stdout
-claw index --dir docs                 # index a specific directory
-claw index --inject AGENTS.md         # embed the index inline in AGENTS.md
-```
-
-Each entry in the index carries a `size` hint like `"1234 tokens, 56 lines"`
-(token count is a chars/4 estimate, ±15% on prose / markdown). Use it to
-decide before reading: a small doc → read the whole body; a large doc →
-go straight to `claw read … --toc` and drill in with `--section`.
-
-Two delivery modes, one underlying scan:
-
-- **stdout (default)** — call `claw index` whenever you need a fresh
-  workspace map. No magic, no on-disk artifact.
-- **`--inject`** — embed the full index inside a `<!-- claw:index -->` block
-  in a host file (typically `AGENTS.md`). Why embed and not just point at a
-  file? Because the agent's runtime surfaces edits to AGENTS.md through its
-  file-change channel — so an inline index gives **passive awareness** as
-  docs change, with no extra read. Idempotent: a no-op rebuild does not
-  rewrite the file.
-
-To keep the embedded index fresh automatically, run `claw install` once —
-it wires `claw index --inject AGENTS.md --quiet` into the agent's lifecycle
-hooks (`SessionStart`, `UserPromptSubmit`, `PostToolUse:Write|Edit|MultiEdit`).
-Each call is a cheap synchronous scan; no background process, no state.
-
-```bash
-claw install            # one-time: auto-refresh AGENTS.md on doc changes
-claw uninstall          # remove the hooks
-```
-
-Only **frontmatter-bearing** docs are indexed: a plain `README.md` or
-`AGENTS.md` is not an OKF concept and is skipped, as are the reserved
-`index.md` / `log.md`. Dot-prefixed directories (`.git`, `.claw`, `.scratch`,
-`.agents`, `.claude`, …) are Unix-hidden infrastructure and never indexed.
-
 ## Author every doc in OKF format
 
 This is the important part. Whenever you create a markdown doc in a workspace —
 a proposal, an issue, a review, a reference note — **start it with YAML
-frontmatter**. A doc without frontmatter is invisible to `claw index` and to any
+frontmatter**. A doc without frontmatter is invisible to the index and to any
 agent scanning the bundle.
 
 ### The one rule and the principle
@@ -95,16 +75,16 @@ navigate it, and link related docs with markdown links (`[name](/path.md)`).
 
 ### Conventional fields
 
-| Field                | When to include it                                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `type`               | Always. A short descriptive kind: `Proposal`, `Issue`, `Review`, `Reference`, `Playbook`.                    |
-| `title`              | A human display name when the filename isn't enough.                                                         |
-| `description`        | One sentence. This is what shows up in every index and preview — always worth writing.                       |
+| Field                | When to include it                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `type`               | Always. A short descriptive kind: `Proposal`, `Issue`, `Review`, `Reference`, `Playbook`.                      |
+| `title`              | A human display name when the filename isn't enough.                                                           |
+| `description`        | One sentence. This is what shows up in every index and preview — always worth writing.                         |
 | `when`               | For load-on-demand knowledge (playbooks, runbooks): the _intent trigger_ that tells an agent to pull this doc. |
-| `timestamp`          | When staleness matters (ISO 8601). Pairs with a `log.md` for history.                                        |
-| `status` / `version` | For living documents that move through states or revisions.                                                  |
-| `resource`           | A canonical URI when the doc describes an external asset.                                                    |
-| `tags`               | Cross-cutting categorization.                                                                                |
+| `timestamp`          | When staleness matters (ISO 8601). Pairs with a `log.md` for history.                                          |
+| `status` / `version` | For living documents that move through states or revisions.                                                    |
+| `resource`           | A canonical URI when the doc describes an external asset.                                                      |
+| `tags`               | Cross-cutting categorization.                                                                                  |
 
 ### Typed starting points
 
@@ -146,9 +126,8 @@ description: Open Knowledge Format conventions.
 resource: https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/
 ```
 
-After authoring or moving docs, the embedded index in AGENTS.md follows
-automatically if `claw install` is wired up; otherwise run `claw index --inject
-AGENTS.md` once.
+A new doc shows up in the directory index the moment it has frontmatter — `claw
+read` recomputes the index on every call, so there is nothing to refresh.
 
 ## Feedback
 

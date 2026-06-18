@@ -30,18 +30,19 @@ const META_KEYS = [
 export const readHandlers: Pick<AppHandlers, "read"> = {
   read: handled(async (options) => {
     const input = options.input;
-    const target = resolve(input.path);
+    const path = input.path ?? "."; // default to the current directory's index
+    const target = resolve(path);
 
     const stat = statSync(target, { throwIfNoEntry: false });
     if (!stat) {
-      throw notFoundError(`Path not found: ${input.path}`, {
+      throw notFoundError(`Path not found: ${path}`, {
         hint: "Pass a markdown file or a directory.",
       });
     }
 
     if (stat.isDirectory()) {
-      // Directory read = the same index `claw index` would print. The index
-      // is computed on demand; there is no on-disk artifact to cache.
+      // A directory's natural reading IS its index — computed live from
+      // frontmatter, no on-disk artifact.
       write(buildIndex(scanDocs(target)).trimEnd());
       return;
     }
@@ -59,13 +60,13 @@ export const readHandlers: Pick<AppHandlers, "read"> = {
 
     const lineCount = body.split("\n").length;
     const long = lineCount > LONG_DOC_LINES;
-    const readHint = `claw read ${input.path} --section <n>`;
+    const readHint = `claw read ${path} --section <n>`;
 
     const channel: Record<string, unknown> = pickMeta(data);
     const links = extractLinks(body);
     if (links.length > 0) channel.links = links;
     if (long) {
-      channel.read = { toc: `claw read ${input.path} --toc`, section: readHint };
+      channel.read = { toc: `claw read ${path} --toc`, section: readHint };
     }
 
     const content = long ? structuralSummary(body, readHint) : body.trim();
