@@ -5,15 +5,16 @@ import { stringify } from "yaml";
 
 import { parseFrontmatter, type Frontmatter } from "./frontmatter.ts";
 
-// The index entry an agent navigates by: a path, a body-size hint, and the
-// doc's frontmatter dumped verbatim. We deliberately don't normalize/derive
-// frontmatter fields — agents read the YAML; fabricated metadata would mislead
-// them. `size` is the one synthesized field, because no human writes it
-// accurately and an agent reads the index expressly to decide whether to
-// fetch full body or jump straight to --toc/--section.
+// The index entry an agent navigates by: a path, a body-size hint (tool-
+// synthesized), and the doc's frontmatter dumped verbatim. We deliberately
+// don't normalize/derive author frontmatter — agents read the YAML; fabricated
+// metadata would mislead them. The size hint is necessary because an agent
+// reads the index expressly to decide whether to fetch full body or jump
+// straight to --toc/--section, but it's *tool* metadata, not author intent —
+// so it lives in the `$claw` namespace, never mixed with frontmatter keys.
 export type DocRecord = {
   path: string; // posix, relative to the scan root
-  size: string; // body-size hint, e.g. "1234 tokens, 56 lines"
+  size: string; // body-size hint, e.g. "~1234 tokens, 56 lines"
   data: Frontmatter;
 };
 
@@ -57,13 +58,15 @@ export function scanDocs(root: string): DocRecord[] {
 // Token estimation uses the canonical no-tokenizer rule of thumb of ~4 chars
 // per token — accurate to ±15% on English prose / markdown for any major LLM
 // tokenizer (cl100k, BPE-based, etc.). Good enough for "is this huge?"; we
-// trade exactness for zero dependencies and zero per-doc overhead.
+// trade exactness for zero dependencies and zero per-doc overhead. The leading
+// `~` makes the approximation explicit at the surface — readers should not
+// take this number as exact.
 function bodySize(body: string): string {
   const tokens = Math.ceil(body.length / 4);
   // Match the line-counting convention in markdown.ts: a trailing newline
   // doesn't add a "line", so --section and `size` agree on what line N means.
   const lines = body.length === 0 ? 0 : body.split("\n").length - (body.endsWith("\n") ? 1 : 0);
-  return `${tokens} tokens, ${lines} lines`;
+  return `~${tokens} tokens, ${lines} lines`;
 }
 
 // Enumerate candidate markdown as posix paths relative to root. In a git repo
@@ -99,11 +102,15 @@ function listMarkdown(root: string): string[] {
   return candidates.filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".")));
 }
 
-// The index a directory read prints: a YAML list, one entry per concept —
-// `file` + `size` plus the doc's frontmatter verbatim. `size` sits next to
-// `file` because it's tool-derived metadata about the file, distinct from
-// author-written frontmatter. Spread order lets a hand-written `data.size` win
-// — same principle that keeps us from synthesizing other fields.
+// The index a directory read prints: a YAML list, one entry per concept.
+// `file` is the concept's identity (OKF: the path *is* the concept) and stays
+// at the top level. `$claw` carries everything tool-synthesized — today just
+// `size`, tomorrow whatever else we surface — so it can never collide with an
+// author's frontmatter key. The doc's own frontmatter spreads in flat at the
+// end: an agent's most common scan is "read the description, decide whether
+// to open" — sinking it into a sub-key would tax that path for no reason.
 export function buildIndex(docs: DocRecord[]): string {
-  return stringify(docs.map((doc) => ({ file: `./${doc.path}`, size: doc.size, ...doc.data })));
+  return stringify(
+    docs.map((doc) => ({ file: `./${doc.path}`, $claw: { size: doc.size }, ...doc.data })),
+  );
 }

@@ -77,7 +77,10 @@ test("read on a directory emits its index, computed live with no on-disk artifac
   const direct = await claw(root, "read", "docs");
   expect(direct.stdout).toContain("file: ./proposal.md");
   expect(direct.stdout).toContain("type: Proposal");
-  expect(direct.stdout).not.toContain("$claw"); // no synthesized header — this IS the index
+  // Each entry carries a $claw block of tool-synthesized metadata (today: the
+  // size hint), kept apart from the author's frontmatter that follows.
+  expect(direct.stdout).toContain("$claw:");
+  expect(direct.stdout).toMatch(/size: ~\d+ tokens, \d+ lines/);
   // claw never writes an index file; the index is always computed on read.
   expect(existsSync(join(root, "index.yaml"))).toBe(false);
 });

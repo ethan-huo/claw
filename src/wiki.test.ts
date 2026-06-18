@@ -64,9 +64,10 @@ test("scans frontmatter docs, skipping reserved, plain, and ignored files", () =
 
 test("scanDocs measures body size with chars/4 token estimate and line count", () => {
   // Body is exactly 8 chars on one line: "abcdefgh" → ceil(8/4) = 2 tokens.
+  // Leading ~ marks the value as a tool-synthesized estimate, not a measurement.
   const root = fixture({ "a.md": "---\ntype: Note\n---\nabcdefgh" });
   const [doc] = scanDocs(root);
-  expect(doc?.size).toBe("2 tokens, 1 lines");
+  expect(doc?.size).toBe("~2 tokens, 1 lines");
 });
 
 test("scanDocs counts lines without inflating on a trailing newline", () => {
@@ -74,7 +75,7 @@ test("scanDocs counts lines without inflating on a trailing newline", () => {
   const body = "line 1\nline 2\nline 3\nline 4\n";
   const root = fixture({ "a.md": `---\ntype: Note\n---\n${body}` });
   const [doc] = scanDocs(root);
-  expect(doc?.size).toBe(`${Math.ceil(body.length / 4)} tokens, 4 lines`);
+  expect(doc?.size).toBe(`~${Math.ceil(body.length / 4)} tokens, 4 lines`);
 });
 
 test("size hint scales with body, not frontmatter — frontmatter is metadata, not payload", () => {
@@ -87,25 +88,31 @@ test("size hint scales with body, not frontmatter — frontmatter is metadata, n
   expect(scanDocs(lean)[0]?.size).toBe(scanDocs(heavy)[0]?.size);
 });
 
-test("builds a YAML list: file + size + frontmatter verbatim per doc", () => {
+test("builds a YAML list: file + $claw (tool meta) + frontmatter verbatim per doc", () => {
   const docs: DocRecord[] = [
     {
       path: "docs/spec.md",
-      size: "100 tokens, 10 lines",
+      size: "~100 tokens, 10 lines",
       data: { type: "Spec", title: "Spec", description: "the spec", tags: ["x"] },
     },
-    { path: "readme.md", size: "5 tokens, 1 lines", data: { type: "Note", when: "on start" } },
+    {
+      path: "readme.md",
+      size: "~5 tokens, 1 lines",
+      data: { type: "Note", when: "on start" },
+    },
   ];
   const out = buildIndex(docs);
   expect(out).toContain("- file: ./docs/spec.md"); // a YAML sequence item
-  expect(out).toContain("size: 100 tokens, 10 lines");
+  expect(out).toContain("$claw:"); // tool namespace, distinct from frontmatter
+  expect(out).toContain("size: ~100 tokens, 10 lines");
   expect(out).toContain("description: the spec");
   expect(out).toContain("when: on start");
-  // round-trips to structured data — size sits next to file, before frontmatter
+  // Round-trips to structured data — file at the top, $claw below it carrying
+  // tool meta, then the author's frontmatter spread flat at the bottom.
   expect(parse(out)).toEqual([
     {
       file: "./docs/spec.md",
-      size: "100 tokens, 10 lines",
+      $claw: { size: "~100 tokens, 10 lines" },
       type: "Spec",
       title: "Spec",
       description: "the spec",
@@ -113,20 +120,28 @@ test("builds a YAML list: file + size + frontmatter verbatim per doc", () => {
     },
     {
       file: "./readme.md",
-      size: "5 tokens, 1 lines",
+      $claw: { size: "~5 tokens, 1 lines" },
       type: "Note",
       when: "on start",
     },
   ]);
 });
 
-test("an author-written `size` in frontmatter wins over the synthesized hint", () => {
-  // Same principle that keeps us from synthesizing other fields: if the
-  // author cared enough to write it, surface their value, not ours.
+test("$claw is the tool namespace; an author's `size` is unaffected", () => {
+  // The whole point of the $claw namespace: tool-synthesized fields can never
+  // collide with author frontmatter. An author writing `size: tiny` keeps it
+  // verbatim at the top level, while the tool's hint lives under `$claw.size`.
   const out = buildIndex([
-    { path: "a.md", size: "100 tokens, 10 lines", data: { type: "Note", size: "tiny" } },
+    { path: "a.md", size: "~100 tokens, 10 lines", data: { type: "Note", size: "tiny" } },
   ]);
-  expect(parse(out)).toEqual([{ file: "./a.md", size: "tiny", type: "Note" }]);
+  expect(parse(out)).toEqual([
+    {
+      file: "./a.md",
+      $claw: { size: "~100 tokens, 10 lines" },
+      type: "Note",
+      size: "tiny",
+    },
+  ]);
 });
 
 test("buildIndex emits an empty YAML list for no docs", () => {

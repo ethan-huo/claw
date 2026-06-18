@@ -1,6 +1,6 @@
 {
   "name": "claw",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OKF-native knowledge index and reader for agent workspaces.",
   "bin": {
     "claw": "./src/main.ts"

@@ -27,6 +27,11 @@ One command — `read` — over a file or a directory.
 - **No on-disk index artifact.** A directory read computes its index live from
   frontmatter and prints to stdout. There is no `index.yaml`, no embedded
   block, no daemon — `claw` is a pure scan→output function.
+- **`$claw:` is the tool→agent namespace.** Anything claw synthesizes (today
+  the `size` hint; a file read's links/read-hints; tomorrow whatever else)
+  lives under `$claw:`, never mixed with author frontmatter. Author
+  frontmatter stays flat at the top of every index entry — that's the path an
+  agent scans most.
 - `scanDocs` indexes only frontmatter-bearing markdown. Dot-prefixed
   directories (`.git`, `.claw`, `.scratch`, `.agents`, `.claude`, …) are
   Unix-hidden infrastructure and are never indexed.

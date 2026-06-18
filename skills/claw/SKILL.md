@@ -29,12 +29,17 @@ claw read docs                        # index a specific directory
 ```
 
 A directory's natural reading is its **index**: a YAML list, one entry per
-frontmatter-bearing doc, carrying the doc's `file`, a `size` hint, and its
-frontmatter verbatim. It is computed live on every read — there is no on-disk
-index file to go stale. Use the `size` hint (e.g. `"1234 tokens, 56 lines"`, a
-chars/4 estimate, ±15% on prose) to decide before reading: a small doc → read
-the whole body; a large doc → go straight to `--toc` and drill in with
-`--section`.
+frontmatter-bearing doc, carrying the doc's `file`, a `$claw:` block of
+tool-synthesized metadata (today: a `size` hint), and the doc's frontmatter
+verbatim. It is computed live on every read — there is no on-disk index file
+to go stale. Use the `$claw.size` hint (e.g. `"~1234 tokens, 56 lines"` — the
+leading `~` flags it as a chars/4 estimate, ±15% on prose) to decide before
+reading: a small doc → read the whole body; a large doc → go straight to
+`--toc` and drill in with `--section`.
+
+Anything claw synthesizes lives under `$claw:`, never mixed in with the
+author's frontmatter — the namespace separation is permanent, so a doc that
+happens to declare its own `size: tiny` keeps it intact.
 
 Only **frontmatter-bearing** docs are indexed: a plain `README.md` or
 `AGENTS.md` is not an OKF concept and is skipped, as are the reserved
