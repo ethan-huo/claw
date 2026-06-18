@@ -1,10 +1,11 @@
 ---
 name: claw
-description: >-
-  Use when reading or indexing markdown knowledge in a workspace — listing what
-  docs exist, navigating a long doc by section, embedding a fresh index into
-  AGENTS.md — or when authoring any new doc (skill, proposal, issue, review,
-  reference) so it follows the Open Knowledge Format (OKF).
+description: >
+  Use whenever you work with markdown knowledge in this workspace — reading or
+  navigating a doc by section, listing or indexing what docs exist, or
+  authoring and editing a doc so it follows the Open Knowledge Format (OKF):
+  YAML frontmatter, a structural body, a generated index. Backs the `claw`
+  CLI (read, index) and the OKF convention every doc here should carry.
 ---
 
 `claw` treats a workspace's markdown as an OKF knowledge bundle: a directory of
@@ -18,7 +19,6 @@ and it sets the convention for how every doc you write should look.
 
 ```bash
 claw --schema           # all commands, typed
-claw --schema=.read     # one command's flags
 ```
 
 ### read — navigate a doc or a directory
@@ -31,10 +31,10 @@ claw read docs                        # a directory → its index (computed live
 ```
 
 The leading `$claw:` YAML block is the tool→agent channel: the doc's own
-frontmatter (`type`, `when`, `timestamp`, …), the concept `links` it points at,
-and — for long docs — how to read further. It is not part of the document body.
-Long docs return a `[claw:summary]`; follow the `--section` hint instead of
-re-reading the whole file.
+frontmatter (`type`, `title`, `description`, …), the concept links extracted
+from the body (`.md` hrefs), and — for long docs — how to read further. It is
+not part of the document body. Long docs return a `[claw:summary]`; follow the
+`--section` hint instead of re-reading the whole file.
 
 ### index — print or embed the index
 
@@ -78,7 +78,7 @@ Only **frontmatter-bearing** docs are indexed: a plain `README.md` or
 ## Author every doc in OKF format
 
 This is the important part. Whenever you create a markdown doc in a workspace —
-a proposal, an issue, a review, a skill, a reference note — **start it with YAML
+a proposal, an issue, a review, a reference note — **start it with YAML
 frontmatter**. A doc without frontmatter is invisible to `claw index` and to any
 agent scanning the bundle.
 
@@ -97,10 +97,10 @@ navigate it, and link related docs with markdown links (`[name](/path.md)`).
 
 | Field                | When to include it                                                                                           |
 | -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `type`               | Always. A short descriptive kind: `Proposal`, `Issue`, `Review`, `Skill`, `Reference`, `Playbook`.           |
+| `type`               | Always. A short descriptive kind: `Proposal`, `Issue`, `Review`, `Reference`, `Playbook`.                    |
 | `title`              | A human display name when the filename isn't enough.                                                         |
 | `description`        | One sentence. This is what shows up in every index and preview — always worth writing.                       |
-| `when`               | For load-on-demand knowledge (skills, playbooks): the _intent trigger_ that tells an agent to pull this doc. |
+| `when`               | For load-on-demand knowledge (playbooks, runbooks): the _intent trigger_ that tells an agent to pull this doc. |
 | `timestamp`          | When staleness matters (ISO 8601). Pairs with a `log.md` for history.                                        |
 | `status` / `version` | For living documents that move through states or revisions.                                                  |
 | `resource`           | A canonical URI when the doc describes an external asset.                                                    |
@@ -110,13 +110,6 @@ navigate it, and link related docs with markdown links (`[name](/path.md)`).
 
 These are _examples of the principle_, not a fixed registry. Invent a new
 `type` whenever it helps — just give it the fields its readers will need.
-
-```yaml
-# skill — knowledge an agent loads on demand → it MUST carry an intent trigger
-type: Skill
-description: How to cut a release.
-when: When the user asks to publish, tag, or ship a version.
-```
 
 ```yaml
 # proposal — a living document → version it and date it
