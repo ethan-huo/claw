@@ -85,6 +85,24 @@ Encode those answers as frontmatter keys. Then write the body as **structural
 markdown** (headings, lists, tables, fenced code) so `--toc`/`--section` can
 navigate it, and link related docs with markdown links (`[name](/path.md)`).
 
+### Multi-line values: use a block scalar
+
+When a value runs long or contains anything that trips YAML — colons, quotes,
+`#`, `>`, `[`, newlines — **do not** inline it as a bare or quoted string and
+fight the escaping. Use a block scalar (`>` folded, or `|` literal) and write
+freely on indented lines:
+
+```yaml
+description: >
+  Anything goes here — colons, "quotes", #hashes, brackets[] — the folded
+  block swallows it all. No escaping, no broken parse.
+```
+
+`>` folds line breaks into spaces (good for prose like `description`); `|`
+preserves them (good for snippets or lists you want kept verbatim). Reaching
+for escapes inside a quoted one-liner is the usual way frontmatter ends up
+invalid — block scalars are the safe default for anything past a few words.
+
 ### Conventional fields
 
 | Field                | When to include it                                                                                             |
