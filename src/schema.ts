@@ -24,7 +24,7 @@ export const schema = {
       s(
         v.object({
           path: v.optional(v.string()), // file or directory; defaults to cwd
-          toc: v.optional(v.boolean()), // heading outline with line counts
+          toc: v.optional(v.boolean()), // OKF-wrapped heading outline with line counts
           section: v.optional(v.string()), // extract section(s): "2", "1.3", or "2-4"
         }),
       ),

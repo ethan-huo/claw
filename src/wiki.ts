@@ -18,6 +18,12 @@ export type DocRecord = {
   data: Frontmatter;
 };
 
+export type BodyMeasure = {
+  tokens: number;
+  lines: number;
+  size: string;
+};
+
 // Non-dot build noise we never want indexed. Dot-prefixed dirs are filtered by
 // the Unix-hidden rule in `listMarkdown` and don't need to be listed here.
 const IGNORED_DIRS = new Set(["node_modules", "dist", "build", "coverage"]);
@@ -33,6 +39,14 @@ const RESERVED = new Set(["index.md", "log.md"]);
 // and being strict here means we don't catch a stray lowercase `skill.md` an
 // author meant as a real concept.
 const SKILL_FILENAME = "SKILL.md";
+
+const TOKEN_WEIGHTS = {
+  asciiAlnum: 0.22,
+  asciiPunct: 0.6,
+  whitespace: 0.05,
+  cjk: 0.86,
+  other: 1.1,
+} as const;
 
 export function scanDocs(root: string): DocRecord[] {
   const candidates = listMarkdown(root);
@@ -74,7 +88,7 @@ export function scanDocs(root: string): DocRecord[] {
     const parsed = parseFrontmatter(text);
     if (!parsed.hasFrontmatter) continue;
 
-    records.push({ path: rel, size: bodySize(parsed.body), data: parsed.data });
+    records.push({ path: rel, size: measureBody(parsed.body).size, data: parsed.data });
   }
 
   records.sort((a, b) => a.path.localeCompare(b.path));
@@ -84,18 +98,60 @@ export function scanDocs(root: string): DocRecord[] {
 // Body-size hint surfaced in the index so an agent can decide, before reading,
 // whether to grab the whole doc or jump straight to --toc / --section.
 //
-// Token estimation uses the canonical no-tokenizer rule of thumb of ~4 chars
-// per token — accurate to ±15% on English prose / markdown for any major LLM
-// tokenizer (cl100k, BPE-based, etc.). Good enough for "is this huge?"; we
-// trade exactness for zero dependencies and zero per-doc overhead. The leading
-// `~` makes the approximation explicit at the surface — readers should not
-// take this number as exact.
-function bodySize(body: string): string {
-  const tokens = Math.ceil(body.length / 4);
+// Fast tokenizer-shaped estimate. The old chars/4 rule undercounted Chinese
+// markdown by roughly half; full BPE counting was accurate but made large
+// indexes scale with tokenizer CPU. These weights are a deliberately small
+// character-class model calibrated against o200k_base on mixed English,
+// Chinese, and markdown docs. The leading `~` remains because this is body-only
+// and excludes YAML wrapper plus model/tool-call overhead.
+export function measureBody(body: string): BodyMeasure {
+  const tokens = estimateTokens(body);
   // Match the line-counting convention in markdown.ts: a trailing newline
   // doesn't add a "line", so --section and `size` agree on what line N means.
   const lines = body.length === 0 ? 0 : body.split("\n").length - (body.endsWith("\n") ? 1 : 0);
-  return `~${tokens} tokens, ${lines} lines`;
+  return { tokens, lines, size: `~${tokens} tokens, ${lines} lines` };
+}
+
+function estimateTokens(text: string): number {
+  let estimate = 0;
+
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code <= 0x7f) {
+      if (isAsciiAlnum(code)) estimate += TOKEN_WEIGHTS.asciiAlnum;
+      else if (isAsciiWhitespace(code)) estimate += TOKEN_WEIGHTS.whitespace;
+      else estimate += TOKEN_WEIGHTS.asciiPunct;
+    } else if (isCjkLike(code)) {
+      estimate += TOKEN_WEIGHTS.cjk;
+    } else {
+      estimate += TOKEN_WEIGHTS.other;
+    }
+  }
+
+  return Math.ceil(estimate);
+}
+
+function isAsciiAlnum(code: number): boolean {
+  return (
+    (code >= 0x30 && code <= 0x39) ||
+    (code >= 0x41 && code <= 0x5a) ||
+    code === 0x5f ||
+    (code >= 0x61 && code <= 0x7a)
+  );
+}
+
+function isAsciiWhitespace(code: number): boolean {
+  return code === 0x20 || (code >= 0x09 && code <= 0x0d);
+}
+
+function isCjkLike(code: number): boolean {
+  return (
+    (code >= 0x3040 && code <= 0x30ff) ||
+    (code >= 0x3400 && code <= 0x9fff) ||
+    (code >= 0xac00 && code <= 0xd7af) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0x20000 && code <= 0x2ebef)
+  );
 }
 
 // Enumerate candidate markdown as posix paths relative to root. In a git repo

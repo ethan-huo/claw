@@ -9,7 +9,7 @@ import { notFoundError } from "../errors.ts";
 import { parseFrontmatter } from "../frontmatter.ts";
 import { handled } from "../handler.ts";
 import { extractLinks, extractSections, renderToc, structuralSummary } from "../markdown.ts";
-import { buildIndex, scanDocs } from "../wiki.ts";
+import { buildIndex, measureBody, scanDocs } from "../wiki.ts";
 
 // Above this body length the default read returns a structural summary instead
 // of full content, to protect the agent's context budget.
@@ -50,7 +50,7 @@ export const readHandlers: Pick<AppHandlers, "read"> = {
     const { data, body } = parseFrontmatter(readFileSync(target, "utf8"));
 
     if (input.toc) {
-      write(renderToc(body));
+      write(clawFrontmatter(tocChannel(body)) + renderToc(body));
       return;
     }
     if (input.section) {
@@ -82,8 +82,13 @@ function pickMeta(data: Frontmatter): Record<string, unknown> {
   return meta;
 }
 
-// `$claw` is the out-of-band tool→agent channel (navigation hints + the doc's
-// own frontmatter), emitted as a YAML block that precedes the markdown content.
+function tocChannel(body: string): Record<string, unknown> {
+  const measure = measureBody(body);
+  return { size: measure.size };
+}
+
+// `$claw` is the out-of-band tool→agent channel, emitted as a YAML block that
+// precedes markdown content without becoming part of the document body.
 function clawFrontmatter(channel: Record<string, unknown>): string {
   if (Object.keys(channel).length === 0) return "";
   const yaml = stringify({ $claw: channel }).trimEnd();

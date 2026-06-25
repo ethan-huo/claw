@@ -65,8 +65,10 @@ test("read surfaces the $claw channel and full body for short docs", async () =>
 test("read --toc and --section navigate by heading", async () => {
   const root = fixture({ "p.md": PROPOSAL });
   const toc = await claw(root, "read", "p.md", "--toc");
+  expect(toc.stdout.startsWith("---\n$claw:")).toBe(true);
+  expect(toc.stdout).toMatch(/size: ~\d+ tokens, \d+ lines/);
+  expect(toc.stdout).not.toContain("hint:");
   expect(toc.stdout).toContain("1 Motivation");
-  expect(toc.stdout).not.toContain("$claw");
 
   const section = await claw(root, "read", "p.md", "--section", "2");
   expect(section.stdout.trim()).toBe("# Design\nhow");

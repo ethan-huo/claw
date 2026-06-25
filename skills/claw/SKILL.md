@@ -33,9 +33,9 @@ frontmatter-bearing doc, carrying the doc's `file`, a `$claw:` block of
 tool-synthesized metadata (today: a `size` hint), and the doc's frontmatter
 verbatim. It is computed live on every read — there is no on-disk index file
 to go stale. Use the `$claw.size` hint (e.g. `"~1234 tokens, 56 lines"` — the
-leading `~` flags it as a chars/4 estimate, ±15% on prose) to decide before
-reading: a small doc → read the whole body; a large doc → go straight to
-`--toc` and drill in with `--section`.
+leading `~` flags it as a calibrated body-only estimate, not a full prompt
+invoice) to decide before reading: a small doc → read the whole body; a large
+doc → go straight to `--toc` and drill in with `--section`.
 
 Anything claw synthesizes lives under `$claw:`, never mixed in with the
 author's frontmatter — the namespace separation is permanent, so a doc that
@@ -57,15 +57,17 @@ any directory index.
 
 ```bash
 claw read docs/proposal.md            # frontmatter ($claw channel) + full body (or a summary if long)
-claw read docs/proposal.md --toc      # heading outline with line counts
+claw read docs/proposal.md --toc      # OKF-wrapped heading outline with line counts
 claw read docs/proposal.md --section 2    # one section + its subtree ("2", "1.3", or a range "2-4")
 ```
 
-The leading `$claw:` YAML block is the tool→agent channel: the doc's own
-frontmatter (`type`, `title`, `description`, …), the concept links extracted
-from the body (`.md` hrefs), and — for long docs — how to read further. It is
-not part of the document body. Long docs return a `[claw:summary]`; follow the
-`--section` hint instead of re-reading the whole file.
+The leading `$claw:` YAML block is the tool→agent channel. A full file read
+surfaces the doc's own frontmatter (`type`, `title`, `description`, …), concept
+links extracted from the body (`.md` hrefs), and — for long docs — how to read
+further. A `--toc` read surfaces `$claw.size`, then the heading outline as the
+body. The block is not part of the document body. Long docs return a
+`[claw:summary]`; follow the `--section` hint instead of re-reading the whole
+file.
 
 ## Author every doc in OKF format
 

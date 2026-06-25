@@ -96,12 +96,18 @@ test("scans frontmatter docs, skipping reserved, plain, and ignored files", () =
   expect(docs[1]?.data).toEqual({ type: "Spec" });
 });
 
-test("scanDocs measures body size with chars/4 token estimate and line count", () => {
-  // Body is exactly 8 chars on one line: "abcdefgh" → ceil(8/4) = 2 tokens.
-  // Leading ~ marks the value as a tool-synthesized estimate, not a measurement.
+test("scanDocs estimates body size with the calibrated fast model and line count", () => {
+  // Leading ~ marks the value as a body-only hint, not a full prompt invoice.
   const root = fixture({ "a.md": "---\ntype: Note\n---\nabcdefgh" });
   const [doc] = scanDocs(root);
   expect(doc?.size).toBe("~2 tokens, 1 lines");
+});
+
+test("scanDocs token hint tracks Chinese markdown without chars/4 undercounting", () => {
+  const body = "# 标题\n\n把 boxsh 从每条命令一个临时沙箱改为每个 session 一个常驻的 init 盒子。\n";
+  const root = fixture({ "a.md": `---\ntype: Note\n---\n${body}` });
+  const [doc] = scanDocs(root);
+  expect(doc?.size).toBe("~28 tokens, 3 lines");
 });
 
 test("scanDocs counts lines without inflating on a trailing newline", () => {
@@ -109,7 +115,7 @@ test("scanDocs counts lines without inflating on a trailing newline", () => {
   const body = "line 1\nline 2\nline 3\nline 4\n";
   const root = fixture({ "a.md": `---\ntype: Note\n---\n${body}` });
   const [doc] = scanDocs(root);
-  expect(doc?.size).toBe(`~${Math.ceil(body.length / 4)} tokens, 4 lines`);
+  expect(doc?.size).toBe("~5 tokens, 4 lines");
 });
 
 test("size hint scales with body, not frontmatter — frontmatter is metadata, not payload", () => {
