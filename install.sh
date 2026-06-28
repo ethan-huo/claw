@@ -4,7 +4,7 @@ set -euo pipefail
 # Install claw from GitHub Releases.
 # Public repos need only curl; private repos fall back to authenticated gh.
 # Override via env: CLAW_REPO, CLAW_VERSION (tag or "latest"), CLAW_INSTALL_DIR.
-REPO="${CLAW_REPO:-ethan-huo/claw}"
+REPO="${CLAW_REPO:-celados/claw}"
 VERSION="${CLAW_VERSION:-latest}"
 BIN_DIR="${CLAW_INSTALL_DIR:-$HOME/.local/bin}"
 

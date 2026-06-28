@@ -30,14 +30,14 @@ claw read docs/proposal.md --section 2
 Public repo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ethan-huo/claw/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/celados/claw/main/install.sh | bash
 ```
 
 Private repo (requires an authenticated `gh` session; the script falls back
 to `gh release download` automatically):
 
 ```bash
-gh api repos/ethan-huo/claw/contents/install.sh --jq .content | base64 -d | bash
+gh api repos/celados/claw/contents/install.sh --jq .content | base64 -d | bash
 ```
 
 From source:

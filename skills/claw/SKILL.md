@@ -158,5 +158,5 @@ File issues against the tool's repo when it fights you instead of working
 around it:
 
 ```bash
-gh issue create -R ethan-huo/claw --title "bug: <summary>" --body "<repro and output>"
+gh issue create -R celados/claw --title "bug: <summary>" --body "<repro and output>"
 ```
