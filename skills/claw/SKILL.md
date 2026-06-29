@@ -152,6 +152,39 @@ resource: https://cloud.google.com/blog/products/data-analytics/how-the-open-kno
 A new doc shows up in the directory index the moment it has frontmatter — `claw
 read` recomputes the index on every call, so there is nothing to refresh.
 
+### Sidecars
+
+When a doc is _about_ another doc — a review of a proposal, notes on an issue,
+a critique of a reference — name it as a **sidecar**: `<doc>.<kind>.md`, living
+next to its subject. The filename itself encodes the relation; the frontmatter
+points back with `resource:`.
+
+```
+docs/
+  proposal.md            # type: Proposal, version: 0.3
+  proposal.review.md     # type: Review,   resource: ./proposal.md
+  proposal.notes.md      # type: Notes,    resource: ./proposal.md
+```
+
+A sidecar is a **living document**, not an append-only log. When your review
+evolves — the proposal changed, your verdict shifted, you found new issues —
+**bump `version` and rewrite the content in place**. Do _not_ spawn
+`proposal.review.v2.md` or `proposal.review-2026-06-29.md`; that fragments the
+conversation and pollutes the index.
+
+```yaml
+---
+type: Review
+title: Review of proposal
+resource: ./proposal.md
+verdict: request-changes # approve | request-changes
+version: 0.3
+timestamp: 2026-06-29T00:00:00Z
+---
+```
+
+One sidecar file per (subject, kind) pair.
+
 ## Feedback
 
 File issues against the tool's repo when it fights you instead of working
