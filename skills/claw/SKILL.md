@@ -58,7 +58,7 @@ any directory index.
 ```bash
 claw read docs/proposal.md            # frontmatter ($claw channel) + full body (or a summary if long)
 claw read docs/proposal.md --toc      # OKF-wrapped heading outline with line counts
-claw read docs/proposal.md --section 2    # one section + its subtree ("2", "1.3", or a range "2-4")
+claw read docs/proposal.md --section 2    # one section + its subtree ("2", "1.3"), a range ("2-4", "1.1-2.1"), or comma-separated selectors ("1,3")
 ```
 
 The leading `$claw:` YAML block is the tool→agent channel. A full file read

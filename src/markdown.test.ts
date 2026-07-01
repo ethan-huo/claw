@@ -73,6 +73,63 @@ test("extracts an inclusive top-level range", () => {
   );
 });
 
+test("extracts an inclusive hierarchical sibling range", () => {
+  const doc = [
+    "# Root",
+    "root",
+    "## One",
+    "one",
+    "## Two",
+    "two",
+    "### Two Detail",
+    "deep",
+    "## Three",
+    "three",
+  ].join("\n");
+
+  expect(extractSections(doc, "1.1-1.2").trim()).toBe(
+    "## One\none\n## Two\ntwo\n### Two Detail\ndeep",
+  );
+});
+
+test("extracts a cross-parent range as a source-order slice", () => {
+  const doc = ["# A", "a", "## A1", "a1", "# B", "b", "## B1", "b1"].join("\n");
+  expect(extractSections(doc, "1.1-2.1").trim()).toBe("## A1\na1\n# B\nb\n## B1\nb1");
+});
+
+test("extracts a range ending at a deeper descendant", () => {
+  const doc = [
+    "# A",
+    "a",
+    "## A1",
+    "a1",
+    "# B",
+    "b",
+    "## B1",
+    "b1",
+    "### B1a",
+    "deep",
+    "## B2",
+    "b2",
+  ].join("\n");
+
+  expect(extractSections(doc, "1.1-2.1.1").trim()).toBe(
+    "## A1\na1\n# B\nb\n## B1\nb1\n### B1a\ndeep",
+  );
+});
+
+test("extracts comma-separated non-overlapping selectors", () => {
+  expect(extractSections(DOC, "1, 3").trim()).toBe("# Intro\nhi\n\n# End\nbye");
+});
+
+test("rejects reversed section ranges", () => {
+  expect(() => extractSections(DOC, "2-1")).toThrow(/Invalid section range/);
+});
+
+test("rejects overlapping multi-selectors", () => {
+  expect(() => extractSections(DOC, "2,2.1")).toThrow(/Overlapping section selectors/);
+});
+
 test("preserves trailing blank lines in a section slice (matches ctx)", () => {
   expect(extractSections("# A\nx\n\n\n# B\ny\n", "1")).toBe("# A\nx\n\n");
 });

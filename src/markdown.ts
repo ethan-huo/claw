@@ -85,8 +85,10 @@ export function renderToc(body: string): string {
   return headings.map((h) => `${h.number} ${h.text} (${h.lineCount})`).join("\n");
 }
 
-// Select sections by hierarchical number ("1.2"), by top-level number ("3"), or
-// by an inclusive top-level range ("2-4"). A match pulls in the whole subtree.
+// Select sections by hierarchical number ("1.2"), by source-order range
+// ("2-4", "1.1-2.2.2"), or by comma-separated selectors. Single sections pull
+// in their subtree; ranges slice from the start heading through the end heading's
+// subtree.
 export function extractSections(body: string, expr: string): string {
   const headings = parseHeadings(body);
   if (headings.length === 0) {
@@ -113,27 +115,68 @@ function selectRanges(
   expr: string,
   totalLines: number,
 ): Array<[number, number]> {
-  const ranges: Array<[number, number]> = [];
-  const range = /^(\d+)-(\d+)$/.exec(expr);
+  const ranges = expr
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((selector) => selectRange(headings, selector, totalLines));
 
-  if (range) {
-    const lo = Math.min(Number(range[1]), Number(range[2]));
-    const hi = Math.max(Number(range[1]), Number(range[2]));
-    for (let i = 0; i < headings.length; i++) {
-      const heading = headings[i];
-      if (!heading || heading.number.includes(".")) continue; // top-level only
-      const n = Number(heading.number);
-      if (n >= lo && n <= hi) ranges.push([heading.line, subtreeEnd(headings, i, totalLines)]);
-    }
-    return ranges;
+  if (ranges.some((range) => range === null)) return [];
+
+  const selected = ranges as Array<[number, number]>;
+  ensureNonOverlapping(selected, expr);
+  return selected;
+}
+
+function selectRange(
+  headings: Heading[],
+  selector: string,
+  totalLines: number,
+): [number, number] | null {
+  const sectionNumber = String.raw`\d+(?:\.\d+)*`;
+  const range = new RegExp(`^(${sectionNumber})-(${sectionNumber})$`).exec(selector);
+
+  if (range) return selectDocumentRange(headings, range[1]!, range[2]!, totalLines);
+
+  const index = headings.findIndex((heading) => heading.number === selector);
+  if (index === -1) return null;
+
+  const heading = headings[index]!;
+  return [heading.line, subtreeEnd(headings, index, totalLines)];
+}
+
+function selectDocumentRange(
+  headings: Heading[],
+  left: string,
+  right: string,
+  totalLines: number,
+): [number, number] | null {
+  const leftIndex = headings.findIndex((heading) => heading.number === left);
+  const rightIndex = headings.findIndex((heading) => heading.number === right);
+  if (leftIndex === -1 || rightIndex === -1) return null;
+
+  if (leftIndex >= rightIndex) {
+    throw usageError(`Invalid section range "${left}-${right}".`, {
+      hint: "Range start must appear before range end in the document.",
+    });
   }
 
-  for (let i = 0; i < headings.length; i++) {
-    if (headings[i]?.number === expr) {
-      ranges.push([headings[i]!.line, subtreeEnd(headings, i, totalLines)]);
+  return [headings[leftIndex]!.line, subtreeEnd(headings, rightIndex, totalLines)];
+}
+
+function ensureNonOverlapping(ranges: Array<[number, number]>, expr: string): void {
+  const sorted = [...ranges].sort((left, right) => left[0] - right[0]);
+
+  for (let i = 1; i < sorted.length; i++) {
+    const previous = sorted[i - 1]!;
+    const current = sorted[i]!;
+    if (current[0] <= previous[1]) {
+      throw usageError(`Overlapping section selectors in "${expr}".`, {
+        hint: "Use non-overlapping section selectors.",
+        details: { ranges },
+      });
     }
   }
-  return ranges;
 }
 
 // Lines of head-preview to show when a long doc has no headings to anchor on.

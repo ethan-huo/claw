@@ -23,6 +23,7 @@ claw read                           # index the current directory
 claw read docs                      # index a directory
 claw read docs/proposal.md --toc    # outline a doc
 claw read docs/proposal.md --section 2
+claw read docs/proposal.md --section 1.1-2.1,3
 ```
 
 ## Install
